@@ -1,0 +1,341 @@
+{
+  "name": "03 — Claim Process Settlement Feedback",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -300],
+      "parameters": {
+        "content": "# Claim Settlement Feedback\n\n**Trigger:** Typeform/JotForm webhook\n**Flow:** Validate → Normalize → AI Sentiment → Route (NEGATIVE/URGENT alert) → Gmail response → Sheets log\n\n**Credentials needed:**\n- `openAiApi`\n- `hubspotApi`\n- `slackApi`\n- `gmailOAuth2`\n- `googleSheetsOAuth2Api`",
+        "height": 200,
+        "width": 360,
+        "color": 7
+      }
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook: Receive Feedback",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "claim-feedback",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson"
+      }
+    },
+    {
+      "id": "if-validate",
+      "name": "IF: Required Fields Present",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.body.claim_id }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.feedback_text }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.claimant_email }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "respond-invalid",
+      "name": "Respond: 400 Bad Request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 140],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": "={ \"error\": \"Missing required fields: claim_id, feedback_text, claimant_email\" }"
+      }
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "claim_id",        "type": "string", "value": "={{ $json.body.claim_id }}"},
+            {"name": "claimant_name",   "type": "string", "value": "={{ $json.body.claimant_name || 'Valued Customer' }}"},
+            {"name": "claimant_email",  "type": "string", "value": "={{ $json.body.claimant_email }}"},
+            {"name": "feedback_text",   "type": "string", "value": "={{ $json.body.feedback_text.substring(0, 2000) }}"},
+            {"name": "settlement_date", "type": "string", "value": "={{ $json.body.settlement_date || new Date().toISOString().split('T')[0] }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-ai",
+      "name": "AI SENTIMENT section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [660, -120],
+      "parameters": {
+        "content": "## AI SENTIMENT\nClassifies feedback and extracts structured insight.\n\nReturns JSON: `{ sentiment, category, priority, summary }`\n\nSentiment values: POSITIVE | NEUTRAL | NEGATIVE | URGENT_COMPLAINT",
+        "height": 110,
+        "width": 280,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-sentiment",
+      "name": "OpenAI: Analyse Sentiment",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [680, 0],
+      "parameters": {
+        "operation": "text",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a claims sentiment analyst. Classify the feedback and return ONLY valid JSON with these fields: {\"sentiment\": \"POSITIVE|NEUTRAL|NEGATIVE|URGENT_COMPLAINT\", \"category\": \"Process|Communication|Outcome|Delay|Other\", \"priority\": \"low|medium|high|critical\", \"summary\": \"<one sentence max 150 chars>\"}. No markdown, no explanation — pure JSON only."
+            },
+            {
+              "role": "user",
+              "content": "Claim ID: {{ $json.claim_id }}\nFeedback: {{ $json.feedback_text }}"
+            }
+          ]
+        },
+        "options": {"maxTokens": 200}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "set-parse-sentiment",
+      "name": "Set: Parse Sentiment Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [900, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "sentiment",      "type": "string", "value": "={{ JSON.parse($json.message.content).sentiment }}"},
+            {"name": "category",       "type": "string", "value": "={{ JSON.parse($json.message.content).category }}"},
+            {"name": "priority",       "type": "string", "value": "={{ JSON.parse($json.message.content).priority }}"},
+            {"name": "ai_summary",     "type": "string", "value": "={{ JSON.parse($json.message.content).summary }}"},
+            {"name": "claim_id",       "type": "string", "value": "={{ $('Set: Normalize Fields').item.json.claim_id }}"},
+            {"name": "claimant_name",  "type": "string", "value": "={{ $('Set: Normalize Fields').item.json.claimant_name }}"},
+            {"name": "claimant_email", "type": "string", "value": "={{ $('Set: Normalize Fields').item.json.claimant_email }}"},
+            {"name": "feedback_text",  "type": "string", "value": "={{ $('Set: Normalize Fields').item.json.feedback_text }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "if-negative",
+      "name": "IF: Negative or Urgent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {
+              "leftValue": "={{ ['NEGATIVE','URGENT_COMPLAINT'].includes($json.sentiment) }}",
+              "rightValue": true,
+              "operator": {"type": "boolean", "operation": "equals"}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-alert",
+      "name": "ALERT section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1340, -160],
+      "parameters": {
+        "content": "## ALERT (Negative/Urgent only)\nSends Slack alert and logs to HubSpot CRM.\n\n**Update:** Set `channel` to your #claims-team Slack channel ID.",
+        "height": 100,
+        "width": 260,
+        "color": 1
+      }
+    },
+    {
+      "id": "slack-alert",
+      "name": "Slack: Alert Claims Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1360, -60],
+      "parameters": {
+        "operation": "message",
+        "channel": "REPLACE_WITH_CLAIMS_CHANNEL_ID",
+        "text": ":warning: *Claim Feedback Alert*\n*Claim ID:* {{ $json.claim_id }}\n*Sentiment:* {{ $json.sentiment }}\n*Priority:* {{ $json.priority }}\n*Category:* {{ $json.category }}\n*Summary:* {{ $json.ai_summary }}\n*Claimant:* {{ $json.claimant_name }} ({{ $json.claimant_email }})",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot Token"
+        }
+      }
+    },
+    {
+      "id": "hubspot-note",
+      "name": "HubSpot: Create CRM Note",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [1360, 80],
+      "parameters": {
+        "resource": "engagement",
+        "operation": "create",
+        "type": "NOTE",
+        "metadata": {
+          "body": "Claim {{ $json.claim_id }} — Sentiment: {{ $json.sentiment }} ({{ $json.priority }} priority)\nCategory: {{ $json.category }}\nSummary: {{ $json.ai_summary }}\nFeedback: {{ $json.feedback_text.substring(0, 500) }}"
+        }
+      },
+      "credentials": {
+        "hubspotApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "id": "sticky-respond",
+      "name": "RESPOND section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1620, -120],
+      "parameters": {
+        "content": "## RESPOND\nSends a personalised email response to the claimant based on sentiment.",
+        "height": 80,
+        "width": 240,
+        "color": 5
+      }
+    },
+    {
+      "id": "gmail-response",
+      "name": "Gmail: Send Personalised Response",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1640, 0],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $json.claimant_email }}",
+        "subject": "Re: Your Claim {{ $json.claim_id }} — Thank You for Your Feedback",
+        "emailType": "html",
+        "message": "={{ $json.sentiment === 'POSITIVE' ? '<p>Dear ' + $json.claimant_name + ',</p><p>Thank you for taking the time to share your positive feedback about your claim settlement experience. We are delighted to hear it went smoothly. Your satisfaction is our priority.</p>' : '<p>Dear ' + $json.claimant_name + ',</p><p>Thank you for sharing your feedback about claim ' + $json.claim_id + '. We sincerely apologise that your experience did not meet expectations. A member of our team will be in touch within 24 hours to address your concerns directly.</p><p>Reference: ' + $json.claim_id + '</p>' }}"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "id": "sheets-log",
+      "name": "Google Sheets: Log Feedback",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1880, 0],
+      "parameters": {
+        "operation": "append",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Feedback Log", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp":      "={{ new Date().toISOString() }}",
+            "claim_id":       "={{ $json.claim_id }}",
+            "claimant_email": "={{ $json.claimant_email }}",
+            "sentiment":      "={{ $json.sentiment }}",
+            "category":       "={{ $json.category }}",
+            "priority":       "={{ $json.priority }}",
+            "ai_summary":     "={{ $json.ai_summary }}"
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "respond-200",
+      "name": "Respond: 200 Processed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2100, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": "={ \"status\": \"processed\", \"sentiment\": \"{{ $json.sentiment }}\" }"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Receive Feedback": {
+      "main": [[{"node": "IF: Required Fields Present", "type": "main", "index": 0}]]
+    },
+    "IF: Required Fields Present": {
+      "main": [
+        [{"node": "Set: Normalize Fields", "type": "main", "index": 0}],
+        [{"node": "Respond: 400 Bad Request", "type": "main", "index": 0}]
+      ]
+    },
+    "Set: Normalize Fields": {
+      "main": [[{"node": "OpenAI: Analyse Sentiment", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Analyse Sentiment": {
+      "main": [[{"node": "Set: Parse Sentiment Result", "type": "main", "index": 0}]]
+    },
+    "Set: Parse Sentiment Result": {
+      "main": [[{"node": "IF: Negative or Urgent", "type": "main", "index": 0}]]
+    },
+    "IF: Negative or Urgent": {
+      "main": [
+        [
+          {"node": "Slack: Alert Claims Team", "type": "main", "index": 0},
+          {"node": "HubSpot: Create CRM Note", "type": "main", "index": 0}
+        ],
+        []
+      ]
+    },
+    "Slack: Alert Claims Team": {
+      "main": [[{"node": "Gmail: Send Personalised Response", "type": "main", "index": 0}]]
+    },
+    "HubSpot: Create CRM Note": {
+      "main": [[{"node": "Gmail: Send Personalised Response", "type": "main", "index": 0}]]
+    },
+    "Gmail: Send Personalised Response": {
+      "main": [[{"node": "Google Sheets: Log Feedback", "type": "main", "index": 0}]]
+    },
+    "Google Sheets: Log Feedback": {
+      "main": [[{"node": "Respond: 200 Processed", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["claims", "insurance", "ai", "sentiment", "production"],
+  "pinData": {}
+}

@@ -1,0 +1,296 @@
+{
+  "name": "07 — Automated Social Media Posting with Approvals",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -300],
+      "parameters": {
+        "content": "# Automated Social Media with Approvals\n\n**Trigger:** Schedule — daily 08:00 UTC\n**Flow:** Read content calendar → AI generate copies → Slack approval → Publish if approved → Log result\n\n**Credentials needed:**\n- `googleSheetsOAuth2Api`\n- `openAiApi`\n- `slackApi`\n- `bufferApi` (HTTP Header Auth)",
+        "height": 190,
+        "width": 380,
+        "color": 7
+      }
+    },
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule: Daily 08:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "hours", "triggerAtHour": 8}]
+        }
+      }
+    },
+    {
+      "id": "sticky-input",
+      "name": "INPUT section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, -120],
+      "parameters": {
+        "content": "## INPUT\nReads today's content from Google Sheets 'Content Calendar' tab.\n\nSheet columns: `date`, `topic`, `platform_targets`, `tone`, `status`\n\nFilters for rows where date = today AND status = 'scheduled'.",
+        "height": 110,
+        "width": 280,
+        "color": 3
+      }
+    },
+    {
+      "id": "sheets-read-calendar",
+      "name": "Google Sheets: Read Today's Content",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [220, 0],
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Content Calendar", "mode": "name"},
+        "filters": {
+          "conditions": [
+            {"keyName": "date", "condition": "eq", "keyValue": "={{ new Date().toISOString().split('T')[0] }}"},
+            {"keyName": "status", "condition": "eq", "keyValue": "scheduled"}
+          ]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "if-has-posts",
+      "name": "IF: Posts Scheduled Today",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "no-posts-stop",
+      "name": "No Posts Today — Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 140],
+      "parameters": {}
+    },
+    {
+      "id": "split-batches",
+      "name": "Split in Batches: 1 Post at a Time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 0],
+      "parameters": {"batchSize": 1, "options": {}}
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Content Brief",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [880, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "topic",            "type": "string", "value": "={{ $json.topic }}"},
+            {"name": "platform_targets", "type": "string", "value": "={{ $json.platform_targets || 'Instagram,LinkedIn,Twitter' }}"},
+            {"name": "tone",             "type": "string", "value": "={{ $json.tone || 'professional and engaging' }}"},
+            {"name": "row_number",       "type": "string", "value": "={{ $json.row_number || '' }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-ai",
+      "name": "AI CONTENT section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1100, -120],
+      "parameters": {
+        "content": "## AI CONTENT GENERATION\nGPT-4 generates platform-optimised copies for Instagram, LinkedIn, and Twitter/X.\n\nReturns structured JSON with a copy for each platform.",
+        "height": 100,
+        "width": 280,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-generate",
+      "name": "OpenAI: Generate Platform Copies",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1120, 0],
+      "parameters": {
+        "operation": "text",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a social media content expert. Given a topic and tone, generate platform-optimised copy and return ONLY valid JSON with this exact structure: {\"instagram\": \"<caption with emojis and hashtags, max 300 chars>\", \"linkedin\": \"<professional insight-led post, max 400 chars>\", \"twitter\": \"<punchy tweet, max 270 chars>\"}"
+            },
+            {
+              "role": "user",
+              "content": "Topic: {{ $json.topic }}\nTone: {{ $json.tone }}\nPlatforms: {{ $json.platform_targets }}"
+            }
+          ]
+        },
+        "options": {"maxTokens": 400}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "if-content-valid",
+      "name": "IF: Content Generated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.message.content.length }}", "rightValue": 50, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-parse-copies",
+      "name": "Set: Parse Platform Copies",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1560, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "instagram_copy", "type": "string", "value": "={{ JSON.parse($json.message.content).instagram }}"},
+            {"name": "linkedin_copy",  "type": "string", "value": "={{ JSON.parse($json.message.content).linkedin }}"},
+            {"name": "twitter_copy",   "type": "string", "value": "={{ JSON.parse($json.message.content).twitter }}"},
+            {"name": "topic",          "type": "string", "value": "={{ $('Set: Normalize Content Brief').item.json.topic }}"},
+            {"name": "row_number",     "type": "string", "value": "={{ $('Set: Normalize Content Brief').item.json.row_number }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-approval",
+      "name": "APPROVAL section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1780, -120],
+      "parameters": {
+        "content": "## HUMAN APPROVAL\nPosts all three platform copies to Slack for review.\n\nBrand manager reacts ✅ to approve, ❌ to reject.\n\nOnly approved posts are published — full audit trail in Google Sheets.",
+        "height": 110,
+        "width": 280,
+        "color": 1
+      }
+    },
+    {
+      "id": "slack-approval",
+      "name": "Slack: Post Approval Request",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1800, 0],
+      "parameters": {
+        "operation": "message",
+        "channel": "REPLACE_WITH_CONTENT_APPROVALS_CHANNEL_ID",
+        "text": "*Content Approval Required*\n*Topic:* {{ $json.topic }}\n\n:instagram: *Instagram:*\n```\n{{ $json.instagram_copy }}\n```\n\n:linkedin: *LinkedIn:*\n```\n{{ $json.linkedin_copy }}\n```\n\n:twitter: *Twitter/X:*\n```\n{{ $json.twitter_copy }}\n```\n\nReact ✅ to approve all, ❌ to reject.",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot Token"
+        }
+      }
+    },
+    {
+      "id": "sheets-mark-in-review",
+      "name": "Google Sheets: Mark In Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2020, 0],
+      "parameters": {
+        "operation": "update",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Content Calendar", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status":          "in_review",
+            "instagram_copy":  "={{ $('Set: Parse Platform Copies').item.json.instagram_copy }}",
+            "linkedin_copy":   "={{ $('Set: Parse Platform Copies').item.json.linkedin_copy }}",
+            "twitter_copy":    "={{ $('Set: Parse Platform Copies').item.json.twitter_copy }}",
+            "updated_at":      "={{ new Date().toISOString() }}"
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 08:00 UTC": {
+      "main": [[{"node": "Google Sheets: Read Today's Content", "type": "main", "index": 0}]]
+    },
+    "Google Sheets: Read Today's Content": {
+      "main": [[{"node": "IF: Posts Scheduled Today", "type": "main", "index": 0}]]
+    },
+    "IF: Posts Scheduled Today": {
+      "main": [
+        [{"node": "Split in Batches: 1 Post at a Time", "type": "main", "index": 0}],
+        [{"node": "No Posts Today — Stop", "type": "main", "index": 0}]
+      ]
+    },
+    "Split in Batches: 1 Post at a Time": {
+      "main": [[{"node": "Set: Normalize Content Brief", "type": "main", "index": 0}]]
+    },
+    "Set: Normalize Content Brief": {
+      "main": [[{"node": "OpenAI: Generate Platform Copies", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Generate Platform Copies": {
+      "main": [[{"node": "IF: Content Generated", "type": "main", "index": 0}]]
+    },
+    "IF: Content Generated": {
+      "main": [
+        [{"node": "Set: Parse Platform Copies", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Set: Parse Platform Copies": {
+      "main": [[{"node": "Slack: Post Approval Request", "type": "main", "index": 0}]]
+    },
+    "Slack: Post Approval Request": {
+      "main": [[{"node": "Google Sheets: Mark In Review", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["social-media", "content", "approvals", "ai", "production"],
+  "pinData": {}
+}

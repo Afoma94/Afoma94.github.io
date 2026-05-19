@@ -1,0 +1,380 @@
+{
+  "name": "04 — AI Invoice Processing & SAP Integration",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -300],
+      "parameters": {
+        "content": "# AI Invoice Processing & SAP Integration\n\n**Trigger:** Gmail — watches inbox for emails labelled 'invoices'\n**Flow:** Download PDF → AI extract fields → Validate vs PO → SAP push → Notify\n\n**Credentials needed:**\n- `gmailOAuth2`\n- `openAiApi`\n- `googleDriveOAuth2`\n- `airtableTokenApi`\n- `sapApi` (HTTP Header Auth)\n- `slackApi`",
+        "height": 210,
+        "width": 380,
+        "color": 7
+      }
+    },
+    {
+      "id": "gmail-trigger",
+      "name": "Gmail: Watch Invoice Emails",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {
+        "pollTimes": {"item": [{"mode": "everyMinute", "minute": 5}]},
+        "filters": {
+          "labelIds": ["INBOX"],
+          "q": "label:invoices has:attachment filename:pdf"
+        },
+        "options": {"dataPropertyAttachmentsPrefixName": "attachment_"}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "id": "if-has-pdf",
+      "name": "IF: Has PDF Attachment",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.attachments.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "no-attachment-stop",
+      "name": "No PDF — Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [440, 140],
+      "parameters": {}
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Email Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "email_id",       "type": "string", "value": "={{ $json.id }}"},
+            {"name": "sender",         "type": "string", "value": "={{ $json.from }}"},
+            {"name": "subject",        "type": "string", "value": "={{ $json.subject }}"},
+            {"name": "attachment_url", "type": "string", "value": "={{ $json.attachments[0].url }}"},
+            {"name": "attachment_name","type": "string", "value": "={{ $json.attachments[0].name }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-drive",
+      "name": "ARCHIVE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [660, -120],
+      "parameters": {
+        "content": "## ARCHIVE\nUploads the raw PDF to Google Drive 'Invoice Inbox' folder for audit trail.\n\n**Update:** Set `folderId` to your Drive folder ID.",
+        "height": 90,
+        "width": 240,
+        "color": 6
+      }
+    },
+    {
+      "id": "drive-upload",
+      "name": "Google Drive: Archive PDF",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [680, 0],
+      "parameters": {
+        "operation": "upload",
+        "name": "={{ $json.attachment_name }}_{{ new Date().toISOString().split('T')[0] }}.pdf",
+        "parents": ["REPLACE_WITH_DRIVE_FOLDER_ID"],
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "googleDriveOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "id": "sticky-ai",
+      "name": "AI EXTRACTION section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [900, -120],
+      "parameters": {
+        "content": "## AI EXTRACTION\nUses GPT-4 to extract structured invoice data from the email body / PDF text.\n\nExtracted fields: vendor_name, invoice_number, invoice_date, line_items, total_amount, currency, po_number",
+        "height": 110,
+        "width": 280,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-extract",
+      "name": "OpenAI: Extract Invoice Data",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [920, 0],
+      "parameters": {
+        "operation": "text",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an invoice data extraction specialist. Extract structured data from the provided invoice information and return ONLY valid JSON with these fields: {\"vendor_name\": \"\", \"invoice_number\": \"\", \"invoice_date\": \"YYYY-MM-DD\", \"total_amount\": 0.00, \"currency\": \"USD\", \"po_number\": \"\", \"line_items\": [], \"confidence\": \"high|medium|low\"}. No markdown, no explanation — pure JSON only."
+            },
+            {
+              "role": "user",
+              "content": "Extract invoice data from:\nSender: {{ $('Set: Normalize Email Fields').item.json.sender }}\nSubject: {{ $('Set: Normalize Email Fields').item.json.subject }}\nFile: {{ $('Set: Normalize Email Fields').item.json.attachment_name }}\nDrive link: {{ $json.webViewLink }}"
+            }
+          ]
+        },
+        "options": {"maxTokens": 500}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "set-parse-invoice",
+      "name": "Set: Parse Invoice Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1140, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "vendor_name",     "type": "string", "value": "={{ JSON.parse($json.message.content).vendor_name }}"},
+            {"name": "invoice_number",  "type": "string", "value": "={{ JSON.parse($json.message.content).invoice_number }}"},
+            {"name": "invoice_date",    "type": "string", "value": "={{ JSON.parse($json.message.content).invoice_date }}"},
+            {"name": "total_amount",    "type": "number", "value": "={{ JSON.parse($json.message.content).total_amount }}"},
+            {"name": "currency",        "type": "string", "value": "={{ JSON.parse($json.message.content).currency }}"},
+            {"name": "po_number",       "type": "string", "value": "={{ JSON.parse($json.message.content).po_number }}"},
+            {"name": "confidence",      "type": "string", "value": "={{ JSON.parse($json.message.content).confidence }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "if-high-confidence",
+      "name": "IF: Extraction Confidence High",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1360, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ ['high','medium'].includes($json.confidence) }}", "rightValue": true, "operator": {"type": "boolean", "operation": "equals"}},
+            {"leftValue": "={{ $json.po_number }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "airtable-find-po",
+      "name": "Airtable: Find Purchase Order",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1580, 0],
+      "parameters": {
+        "operation": "search",
+        "baseId": "REPLACE_WITH_AIRTABLE_BASE_ID",
+        "tableId": "Purchase Orders",
+        "filterByFormula": "={PO_Number}='{{ $json.po_number }}'",
+        "options": {"maxRecords": 1}
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "id": "if-po-match",
+      "name": "IF: PO Match Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1800, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.records.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-sap",
+      "name": "SAP PUSH section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2020, -140],
+      "parameters": {
+        "content": "## SAP PUSH\nPOSTs validated invoice data to SAP via REST API.\n\n**HTTPS only** — never connect to SAP over HTTP.\n**Update:** Replace SAP endpoint URL with your environment's API URL.",
+        "height": 110,
+        "width": 280,
+        "color": 6
+      }
+    },
+    {
+      "id": "sap-push",
+      "name": "SAP: POST Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2040, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://REPLACE_WITH_SAP_HOST/sap/opu/odata/sap/API_SUPPLIER_INVOICE_SRV/A_SupplierInvoice",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "X-CSRF-Token", "value": "Fetch"}
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ \"SupplierInvoice\": $('Set: Parse Invoice Fields').item.json.invoice_number, \"CompanyCode\": \"REPLACE_WITH_COMPANY_CODE\", \"FiscalYear\": new Date().getFullYear().toString(), \"SupplierInvoiceIDByInvcgParty\": $('Set: Parse Invoice Fields').item.json.invoice_number, \"InvoicingParty\": $('Set: Parse Invoice Fields').item.json.vendor_name, \"DocumentDate\": $('Set: Parse Invoice Fields').item.json.invoice_date, \"InvoiceGrossAmount\": $('Set: Parse Invoice Fields').item.json.total_amount, \"DocumentCurrency\": $('Set: Parse Invoice Fields').item.json.currency, \"PurchaseOrder\": $('Set: Parse Invoice Fields').item.json.po_number }) }}",
+        "options": {"timeout": 30000, "retry": {"enabled": true, "maxTries": 3, "waitBetweenTries": 3000}}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "SAP API Credentials"
+        }
+      }
+    },
+    {
+      "id": "if-sap-success",
+      "name": "IF: SAP Push Succeeded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2260, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.d?.SupplierInvoice || $json.SupplierInvoice }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "slack-success",
+      "name": "Slack: Notify Finance Team — Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [2480, -80],
+      "parameters": {
+        "operation": "message",
+        "channel": "REPLACE_WITH_FINANCE_CHANNEL_ID",
+        "text": ":white_check_mark: Invoice processed successfully!\n*Vendor:* {{ $('Set: Parse Invoice Fields').item.json.vendor_name }}\n*Invoice #:* {{ $('Set: Parse Invoice Fields').item.json.invoice_number }}\n*Amount:* {{ $('Set: Parse Invoice Fields').item.json.total_amount }} {{ $('Set: Parse Invoice Fields').item.json.currency }}\n*PO:* {{ $('Set: Parse Invoice Fields').item.json.po_number }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot Token"
+        }
+      }
+    },
+    {
+      "id": "slack-flag",
+      "name": "Slack: Flag PO Mismatch",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [2020, 160],
+      "parameters": {
+        "operation": "message",
+        "channel": "REPLACE_WITH_FINANCE_CHANNEL_ID",
+        "text": ":warning: *Invoice requires manual review*\n*Vendor:* {{ $('Set: Parse Invoice Fields').item.json.vendor_name }}\n*Invoice #:* {{ $('Set: Parse Invoice Fields').item.json.invoice_number }}\n*PO #:* {{ $('Set: Parse Invoice Fields').item.json.po_number }}\n*Issue:* PO not found or confidence too low ({{ $('Set: Parse Invoice Fields').item.json.confidence }})",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Gmail: Watch Invoice Emails": {
+      "main": [[{"node": "IF: Has PDF Attachment", "type": "main", "index": 0}]]
+    },
+    "IF: Has PDF Attachment": {
+      "main": [
+        [{"node": "Set: Normalize Email Fields", "type": "main", "index": 0}],
+        [{"node": "No PDF — Stop", "type": "main", "index": 0}]
+      ]
+    },
+    "Set: Normalize Email Fields": {
+      "main": [[{"node": "Google Drive: Archive PDF", "type": "main", "index": 0}]]
+    },
+    "Google Drive: Archive PDF": {
+      "main": [[{"node": "OpenAI: Extract Invoice Data", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Extract Invoice Data": {
+      "main": [[{"node": "Set: Parse Invoice Fields", "type": "main", "index": 0}]]
+    },
+    "Set: Parse Invoice Fields": {
+      "main": [[{"node": "IF: Extraction Confidence High", "type": "main", "index": 0}]]
+    },
+    "IF: Extraction Confidence High": {
+      "main": [
+        [{"node": "Airtable: Find Purchase Order", "type": "main", "index": 0}],
+        [{"node": "Slack: Flag PO Mismatch", "type": "main", "index": 0}]
+      ]
+    },
+    "Airtable: Find Purchase Order": {
+      "main": [[{"node": "IF: PO Match Found", "type": "main", "index": 0}]]
+    },
+    "IF: PO Match Found": {
+      "main": [
+        [{"node": "SAP: POST Invoice", "type": "main", "index": 0}],
+        [{"node": "Slack: Flag PO Mismatch", "type": "main", "index": 0}]
+      ]
+    },
+    "SAP: POST Invoice": {
+      "main": [[{"node": "IF: SAP Push Succeeded", "type": "main", "index": 0}]]
+    },
+    "IF: SAP Push Succeeded": {
+      "main": [
+        [{"node": "Slack: Notify Finance Team — Success", "type": "main", "index": 0}],
+        [{"node": "Slack: Flag PO Mismatch", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["invoice", "sap", "finance", "ai", "production"],
+  "pinData": {}
+}

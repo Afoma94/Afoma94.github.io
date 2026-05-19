@@ -1,0 +1,414 @@
+{
+  "name": "06 — Personalised LinkedIn Outreach with OpenAI",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -300],
+      "parameters": {
+        "content": "# Personalised LinkedIn Outreach\n\n**Trigger:** Schedule — Mon–Fri 09:00 UTC\n**Flow:** Read prospects → Scrape profiles (PhantomBuster) → Generate messages (GPT-4) → Slack approval → Send + CRM log\n\n**Credentials needed:**\n- `googleSheetsOAuth2Api`\n- `phantomBusterApi` (HTTP Header Auth)\n- `openAiApi`\n- `hubspotApi`\n- `slackApi`\n- `gmailOAuth2`",
+        "height": 210,
+        "width": 400,
+        "color": 7
+      }
+    },
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule: Mon–Fri 09:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 9 * * 1-5"}]
+        }
+      }
+    },
+    {
+      "id": "sticky-input",
+      "name": "INPUT section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, -120],
+      "parameters": {
+        "content": "## INPUT\nReads pending prospects from Google Sheets.\n\nSheet columns: `linkedin_url`, `name`, `company`, `status`, `notes`\n\nBatches to 10 prospects per run to respect LinkedIn and PhantomBuster rate limits.",
+        "height": 110,
+        "width": 280,
+        "color": 3
+      }
+    },
+    {
+      "id": "sheets-read-prospects",
+      "name": "Google Sheets: Read Pending Prospects",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [220, 0],
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Prospect Queue", "mode": "name"},
+        "filters": {
+          "conditions": [{"keyName": "status", "condition": "eq", "keyValue": "pending"}]
+        },
+        "options": {"maxRecords": 10}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "if-has-prospects",
+      "name": "IF: Prospects to Process",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "no-prospects-stop",
+      "name": "No Prospects — Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 140],
+      "parameters": {}
+    },
+    {
+      "id": "split-batches",
+      "name": "Split in Batches: 1 at a Time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 0],
+      "parameters": {"batchSize": 1, "options": {}}
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Prospect",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [880, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "linkedin_url", "type": "string", "value": "={{ $json.linkedin_url }}"},
+            {"name": "prospect_name","type": "string", "value": "={{ $json.name }}"},
+            {"name": "company",      "type": "string", "value": "={{ $json.company || '' }}"},
+            {"name": "notes",        "type": "string", "value": "={{ $json.notes || '' }}"},
+            {"name": "row_number",   "type": "string", "value": "={{ $json.row_number || '' }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-phantom",
+      "name": "PROFILE SCRAPE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1100, -140],
+      "parameters": {
+        "content": "## PROFILE SCRAPE\nLaunches PhantomBuster LinkedIn Profile Scraper.\n\n**Update:** Replace `phantomId` with your PhantomBuster Phantom ID.\n\n**Rate limit:** 60s wait added after scrape to respect LinkedIn limits.",
+        "height": 120,
+        "width": 280,
+        "color": 6
+      }
+    },
+    {
+      "id": "phantom-launch",
+      "name": "PhantomBuster: Launch Profile Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.phantombuster.com/api/v2/agents/launch",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{"name": "X-Phantombuster-Key", "value": "={{ $credentials.phantomBusterApi.value }}"}]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={ \"id\": \"REPLACE_WITH_PHANTOM_ID\", \"argument\": { \"sessionCookie\": \"REPLACE_WITH_LI_COOKIE\", \"spreadsheetUrl\": \"{{ $json.linkedin_url }}\", \"numberOfProfiles\": 1 } }",
+        "options": {"timeout": 30000, "retry": {"enabled": true, "maxTries": 2, "waitBetweenTries": 5000}}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "PhantomBuster API Key"
+        }
+      }
+    },
+    {
+      "id": "wait-60s",
+      "name": "Wait: 60s for Phantom to Complete",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1340, 0],
+      "parameters": {"amount": 60, "unit": "seconds"}
+    },
+    {
+      "id": "phantom-fetch",
+      "name": "PhantomBuster: Fetch Profile Output",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1560, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.phantombuster.com/api/v2/agents/REPLACE_WITH_PHANTOM_ID/output",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{"name": "X-Phantombuster-Key", "value": "={{ $credentials.phantomBusterApi.value }}"}]
+        },
+        "options": {"timeout": 30000}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "PhantomBuster API Key"
+        }
+      }
+    },
+    {
+      "id": "if-profile-retrieved",
+      "name": "IF: Profile Data Retrieved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.output?.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "mark-scrape-failed",
+      "name": "Google Sheets: Mark Scrape Failed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2000, 140],
+      "parameters": {
+        "operation": "update",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Prospect Queue", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {"status": "scrape_failed", "updated_at": "={{ new Date().toISOString() }}"}
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "set-profile-highlights",
+      "name": "Set: Extract Profile Highlights",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2000, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "headline",     "type": "string", "value": "={{ $json.output[0]?.headline || $('Set: Normalize Prospect').item.json.notes }}"},
+            {"name": "company",      "type": "string", "value": "={{ $json.output[0]?.company || $('Set: Normalize Prospect').item.json.company }}"},
+            {"name": "prospect_name","type": "string", "value": "={{ $('Set: Normalize Prospect').item.json.prospect_name }}"},
+            {"name": "linkedin_url", "type": "string", "value": "={{ $('Set: Normalize Prospect').item.json.linkedin_url }}"},
+            {"name": "row_number",   "type": "string", "value": "={{ $('Set: Normalize Prospect').item.json.row_number }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-ai",
+      "name": "AI MESSAGE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2220, -120],
+      "parameters": {
+        "content": "## AI MESSAGE\nGPT-4 generates a unique, human-sounding 3-sentence LinkedIn connection message tailored to each prospect's profile.",
+        "height": 100,
+        "width": 260,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-message",
+      "name": "OpenAI: Generate Personalised Message",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [2240, 0],
+      "parameters": {
+        "operation": "text",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert at writing professional LinkedIn connection request messages. Write exactly 3 sentences. Sound human and specific — not salesy. Reference their role or company naturally. End with a soft, non-pushy call to action. Keep it under 300 characters total."
+            },
+            {
+              "role": "user",
+              "content": "Write a LinkedIn connection request for:\nName: {{ $json.prospect_name }}\nRole: {{ $json.headline }}\nCompany: {{ $json.company }}"
+            }
+          ]
+        },
+        "options": {"maxTokens": 150}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "set-message",
+      "name": "Set: Extract Final Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2460, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "message",       "type": "string", "value": "={{ $json.message.content }}"},
+            {"name": "prospect_name", "type": "string", "value": "={{ $('Set: Extract Profile Highlights').item.json.prospect_name }}"},
+            {"name": "company",       "type": "string", "value": "={{ $('Set: Extract Profile Highlights').item.json.company }}"},
+            {"name": "linkedin_url",  "type": "string", "value": "={{ $('Set: Extract Profile Highlights').item.json.linkedin_url }}"},
+            {"name": "row_number",    "type": "string", "value": "={{ $('Set: Extract Profile Highlights').item.json.row_number }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-approval",
+      "name": "APPROVAL section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2680, -120],
+      "parameters": {
+        "content": "## HUMAN APPROVAL\nPosts message to Slack for review before sending.\n\nApprove = react ✅ then webhook fires 'approved'\nReject = react ❌ then webhook fires 'rejected'\n\n**Update:** Configure Slack interactivity webhook URL.",
+        "height": 120,
+        "width": 280,
+        "color": 1
+      }
+    },
+    {
+      "id": "slack-approval",
+      "name": "Slack: Post for Approval",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [2700, 0],
+      "parameters": {
+        "operation": "message",
+        "channel": "REPLACE_WITH_OUTREACH_APPROVALS_CHANNEL_ID",
+        "text": "*LinkedIn Message for Approval*\n\n*To:* {{ $json.prospect_name }} @ {{ $json.company }}\n*Profile:* {{ $json.linkedin_url }}\n\n*Proposed Message:*\n```\n{{ $json.message }}\n```\n\nReact ✅ to approve, ❌ to reject.",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot Token"
+        }
+      }
+    },
+    {
+      "id": "sheets-update-in-review",
+      "name": "Google Sheets: Mark In Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2920, 0],
+      "parameters": {
+        "operation": "update",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Prospect Queue", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status":     "in_review",
+            "ai_message": "={{ $('Set: Extract Final Message').item.json.message }}",
+            "updated_at": "={{ new Date().toISOString() }}"
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule: Mon–Fri 09:00 UTC": {
+      "main": [[{"node": "Google Sheets: Read Pending Prospects", "type": "main", "index": 0}]]
+    },
+    "Google Sheets: Read Pending Prospects": {
+      "main": [[{"node": "IF: Prospects to Process", "type": "main", "index": 0}]]
+    },
+    "IF: Prospects to Process": {
+      "main": [
+        [{"node": "Split in Batches: 1 at a Time", "type": "main", "index": 0}],
+        [{"node": "No Prospects — Stop", "type": "main", "index": 0}]
+      ]
+    },
+    "Split in Batches: 1 at a Time": {
+      "main": [[{"node": "Set: Normalize Prospect", "type": "main", "index": 0}]]
+    },
+    "Set: Normalize Prospect": {
+      "main": [[{"node": "PhantomBuster: Launch Profile Scraper", "type": "main", "index": 0}]]
+    },
+    "PhantomBuster: Launch Profile Scraper": {
+      "main": [[{"node": "Wait: 60s for Phantom to Complete", "type": "main", "index": 0}]]
+    },
+    "Wait: 60s for Phantom to Complete": {
+      "main": [[{"node": "PhantomBuster: Fetch Profile Output", "type": "main", "index": 0}]]
+    },
+    "PhantomBuster: Fetch Profile Output": {
+      "main": [[{"node": "IF: Profile Data Retrieved", "type": "main", "index": 0}]]
+    },
+    "IF: Profile Data Retrieved": {
+      "main": [
+        [{"node": "Set: Extract Profile Highlights", "type": "main", "index": 0}],
+        [{"node": "Google Sheets: Mark Scrape Failed", "type": "main", "index": 0}]
+      ]
+    },
+    "Set: Extract Profile Highlights": {
+      "main": [[{"node": "OpenAI: Generate Personalised Message", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Generate Personalised Message": {
+      "main": [[{"node": "Set: Extract Final Message", "type": "main", "index": 0}]]
+    },
+    "Set: Extract Final Message": {
+      "main": [[{"node": "Slack: Post for Approval", "type": "main", "index": 0}]]
+    },
+    "Slack: Post for Approval": {
+      "main": [[{"node": "Google Sheets: Mark In Review", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["linkedin", "outreach", "sales", "ai", "production"],
+  "pinData": {}
+}

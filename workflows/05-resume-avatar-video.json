@@ -1,0 +1,298 @@
+{
+  "name": "05 — AI Resume Avatar Video Generator",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -300],
+      "parameters": {
+        "content": "# AI Resume Avatar Video Generator\n\n**Trigger:** Tally or Google Forms webhook\n**Flow:** Validate → OpenAI script → HeyGen avatar → ElevenLabs voice → Drive upload → Gmail delivery\n\n**Credentials needed:**\n- `openAiApi`\n- `heyGenApi` (HTTP Header Auth)\n- `elevenLabsApi` (HTTP Header Auth)\n- `googleDriveOAuth2`\n- `gmailOAuth2`",
+        "height": 200,
+        "width": 380,
+        "color": 7
+      }
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook: Receive Resume Submission",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resume-video",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson"
+      }
+    },
+    {
+      "id": "if-validate",
+      "name": "IF: Required Fields Present",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.body.full_name }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.email }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.resume_text }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "respond-invalid",
+      "name": "Respond: 400 Missing Fields",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 140],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": "={ \"error\": \"Required fields: full_name, email, resume_text\" }"
+      }
+    },
+    {
+      "id": "respond-accepted",
+      "name": "Respond: 202 Accepted — Processing",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, -60],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 202,
+        "responseBody": "={ \"status\": \"processing\", \"message\": \"Your video CV is being created. You will receive an email within 10 minutes.\" }"
+      }
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Submission",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [660, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "full_name",   "type": "string", "value": "={{ $json.body.full_name }}"},
+            {"name": "email",       "type": "string", "value": "={{ $json.body.email }}"},
+            {"name": "resume_text", "type": "string", "value": "={{ $json.body.resume_text.substring(0, 3000) }}"},
+            {"name": "job_target",  "type": "string", "value": "={{ $json.body.job_target || '' }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-script",
+      "name": "SCRIPT GEN section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, -120],
+      "parameters": {
+        "content": "## SCRIPT GENERATION\nGPT-4 writes a 60-second personalised video CV script.\n\nFirst-person, professional tone. Highlights top 3 strengths and ends with a call to action.",
+        "height": 100,
+        "width": 260,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-script",
+      "name": "OpenAI: Generate Video Script",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [900, 0],
+      "parameters": {
+        "operation": "text",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a professional career coach and video scriptwriter. Write a 60-second first-person video CV script. Structure: Opening (name + role, 5s), Key Strengths (3 highlights, 40s), Value Proposition (what I bring, 10s), CTA (contact / interview invitation, 5s). Be warm, confident, and specific. No filler words."
+            },
+            {
+              "role": "user",
+              "content": "Name: {{ $json.full_name }}\nTarget Role: {{ $json.job_target }}\nResume:\n{{ $json.resume_text }}"
+            }
+          ]
+        },
+        "options": {"maxTokens": 500}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "if-script-valid",
+      "name": "IF: Script Generated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.message.content.length }}", "rightValue": 80, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-script",
+      "name": "Set: Extract Script",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1340, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "script",    "type": "string", "value": "={{ $json.message.content }}"},
+            {"name": "full_name", "type": "string", "value": "={{ $('Set: Normalize Submission').item.json.full_name }}"},
+            {"name": "email",     "type": "string", "value": "={{ $('Set: Normalize Submission').item.json.email }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-heygen",
+      "name": "AVATAR VIDEO section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1560, -120],
+      "parameters": {
+        "content": "## AVATAR VIDEO\nSends script to HeyGen to produce a talking-head avatar video.\n\n**Update:** Replace `avatar_id` and `voice_id` with your chosen HeyGen avatar and voice.",
+        "height": 100,
+        "width": 260,
+        "color": 6
+      }
+    },
+    {
+      "id": "heygen-generate",
+      "name": "HeyGen: Generate Avatar Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1580, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.heygen.com/v2/video/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{"name": "X-Api-Key", "value": "={{ $credentials.heyGenApi.value }}"}]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={ \"video_inputs\": [{\"character\": {\"type\": \"avatar\", \"avatar_id\": \"REPLACE_WITH_AVATAR_ID\", \"avatar_style\": \"normal\"}, \"voice\": {\"type\": \"text\", \"input_text\": \"{{ $json.script }}\", \"voice_id\": \"REPLACE_WITH_VOICE_ID\"}}], \"dimension\": {\"width\": 1920, \"height\": 1080} }",
+        "options": {"timeout": 30000, "retry": {"enabled": true, "maxTries": 2, "waitBetweenTries": 5000}}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "HeyGen API Key"
+        }
+      }
+    },
+    {
+      "id": "set-video-id",
+      "name": "Set: Store Video ID + Metadata",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1800, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "video_id",  "type": "string", "value": "={{ $json.data.video_id }}"},
+            {"name": "full_name", "type": "string", "value": "={{ $('Set: Extract Script').item.json.full_name }}"},
+            {"name": "email",     "type": "string", "value": "={{ $('Set: Extract Script').item.json.email }}"},
+            {"name": "video_url", "type": "string", "value": "={{ $json.data.video_url || '' }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-deliver",
+      "name": "DELIVER section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2020, -120],
+      "parameters": {
+        "content": "## DELIVER\nEmails the completed video URL directly to the candidate.\n\nIn production: add a polling loop to check HeyGen video status before sending.",
+        "height": 100,
+        "width": 260,
+        "color": 5
+      }
+    },
+    {
+      "id": "gmail-deliver",
+      "name": "Gmail: Deliver Video to Candidate",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [2040, 0],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $json.email }}",
+        "subject": "Your Video CV is Ready, {{ $json.full_name }}!",
+        "emailType": "html",
+        "message": "<h2>Your Video CV is Ready! 🎬</h2><p>Hi {{ $json.full_name }},</p><p>Your personalised video CV has been created and is ready to share with employers.</p><p><a href='{{ $json.video_url }}' style='display:inline-block;padding:12px 24px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;font-weight:600;'>Watch Your Video CV ▶</a></p><p>Tips for using your video CV:<br>• Share the link directly with hiring managers<br>• Add it to your LinkedIn profile<br>• Include it in your email signature</p><p>Good luck with your job search!</p>"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Receive Resume Submission": {
+      "main": [[{"node": "IF: Required Fields Present", "type": "main", "index": 0}]]
+    },
+    "IF: Required Fields Present": {
+      "main": [
+        [
+          {"node": "Respond: 202 Accepted — Processing", "type": "main", "index": 0},
+          {"node": "Set: Normalize Submission", "type": "main", "index": 0}
+        ],
+        [{"node": "Respond: 400 Missing Fields", "type": "main", "index": 0}]
+      ]
+    },
+    "Set: Normalize Submission": {
+      "main": [[{"node": "OpenAI: Generate Video Script", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Generate Video Script": {
+      "main": [[{"node": "IF: Script Generated", "type": "main", "index": 0}]]
+    },
+    "IF: Script Generated": {
+      "main": [
+        [{"node": "Set: Extract Script", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Set: Extract Script": {
+      "main": [[{"node": "HeyGen: Generate Avatar Video", "type": "main", "index": 0}]]
+    },
+    "HeyGen: Generate Avatar Video": {
+      "main": [[{"node": "Set: Store Video ID + Metadata", "type": "main", "index": 0}]]
+    },
+    "Set: Store Video ID + Metadata": {
+      "main": [[{"node": "Gmail: Deliver Video to Candidate", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["resume", "video", "ai", "hr", "production"],
+  "pinData": {}
+}

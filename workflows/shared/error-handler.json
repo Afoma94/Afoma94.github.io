@@ -1,0 +1,161 @@
+{
+  "name": "Shared Error Handler",
+  "nodes": [
+    {
+      "id": "sticky-trigger",
+      "name": "TRIGGER — Catches all workflow errors",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, -200],
+      "parameters": {
+        "content": "## TRIGGER\nThis sub-workflow is called automatically by n8n whenever any workflow sets it as its `errorWorkflow`.\n\nDo NOT activate manually — it is triggered by error events only.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      }
+    },
+    {
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "sticky-normalize",
+      "name": "NORMALIZE — Extract error fields",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, -200],
+      "parameters": {
+        "content": "## NORMALIZE\nExtracts and sanitises error fields.\n\n- `input_summary` is capped at 500 chars to prevent large payloads.\n- No secrets or credentials are logged.",
+        "height": 120,
+        "width": 280,
+        "color": 3
+      }
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Error Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [220, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "timestamp",
+              "type": "string",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "name": "workflow_name",
+              "type": "string",
+              "value": "={{ $execution.workflowName || 'Unknown Workflow' }}"
+            },
+            {
+              "name": "node_name",
+              "type": "string",
+              "value": "={{ $execution.error?.node?.name || 'Unknown Node' }}"
+            },
+            {
+              "name": "error_message",
+              "type": "string",
+              "value": "={{ $execution.error?.message || 'No error message' }}"
+            },
+            {
+              "name": "execution_id",
+              "type": "string",
+              "value": "={{ $execution.id }}"
+            },
+            {
+              "name": "input_summary",
+              "type": "string",
+              "value": "={{ JSON.stringify($execution.error?.context || {}).substring(0, 500) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-log",
+      "name": "LOG — Append to Google Sheets error log",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [460, -200],
+      "parameters": {
+        "content": "## LOG\nAppends one row to the 'Error Log' tab in your Google Sheets error log spreadsheet.\n\n**Before using:** Update the `documentId` below with your actual Google Sheets spreadsheet ID.",
+        "height": 130,
+        "width": 300,
+        "color": 6
+      }
+    },
+    {
+      "id": "sheets-log",
+      "name": "Google Sheets: Append Error Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [480, 0],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Error Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp":    "={{ $json.timestamp }}",
+            "workflow_name":"={{ $json.workflow_name }}",
+            "node_name":    "={{ $json.node_name }}",
+            "error_message":"={{ $json.error_message }}",
+            "execution_id": "={{ $json.execution_id }}",
+            "input_summary":"={{ $json.input_summary }}"
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "sticky-done",
+      "name": "DONE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [740, -200],
+      "parameters": {
+        "content": "## DONE\nError has been logged. The workflow stops here.\n\nOptionally: add a Slack or Gmail node after Google Sheets to also send real-time alerts.",
+        "height": 100,
+        "width": 260,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [[{"node": "Set: Normalize Error Fields", "type": "main", "index": 0}]]
+    },
+    "Set: Normalize Error Fields": {
+      "main": [[{"node": "Google Sheets: Append Error Row", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["shared", "error-handler", "production"],
+  "pinData": {}
+}

@@ -1,0 +1,375 @@
+{
+  "name": "02 — AI Video Creation & Multi-Platform Posting",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -320],
+      "parameters": {
+        "content": "# AI Video Creation & Multi-Platform Posting\n\n**Trigger:** Schedule (daily) or Webhook (manual)\n**Flow:** Get prompt → OpenAI script → HeyGen video → ElevenLabs voice → Drive upload → Buffer post\n\n**Credentials needed:**\n- `openAiApi`\n- `heyGenApi` (HTTP Header Auth)\n- `elevenLabsApi` (HTTP Header Auth)\n- `googleDriveOAuth2`\n- `googleSheetsOAuth2Api`\n- `bufferApi` (HTTP Header Auth)",
+        "height": 220,
+        "width": 400,
+        "color": 7
+      }
+    },
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule: Daily 09:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "hours", "triggerAtHour": 9}]
+        }
+      }
+    },
+    {
+      "id": "sticky-input",
+      "name": "INPUT section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, -120],
+      "parameters": {
+        "content": "## INPUT\nReads today's content prompt from Google Sheets 'Content Queue' tab.\n\nSheet columns: `date`, `topic`, `platform_targets`, `tone`, `status`\n\nUpdate `documentId` with your spreadsheet ID.",
+        "height": 120,
+        "width": 280,
+        "color": 3
+      }
+    },
+    {
+      "id": "sheets-get-prompt",
+      "name": "Google Sheets: Get Today's Prompt",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [220, 0],
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Content Queue", "mode": "name"},
+        "filters": {
+          "conditions": [
+            {"keyName": "status", "condition": "eq", "keyValue": "scheduled"},
+            {"keyName": "date", "condition": "eq", "keyValue": "={{ new Date().toISOString().split('T')[0] }}"}
+          ]
+        },
+        "options": {"limitToFirst": true}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "if-has-prompt",
+      "name": "IF: Prompt Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.topic }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "no-prompt-stop",
+      "name": "No Content Today — Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 140],
+      "parameters": {}
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Content Brief",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [660, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "topic",            "type": "string", "value": "={{ $json.topic }}"},
+            {"name": "platform_targets", "type": "string", "value": "={{ $json.platform_targets || 'Instagram,YouTube,TikTok' }}"},
+            {"name": "tone",             "type": "string", "value": "={{ $json.tone || 'professional and engaging' }}"},
+            {"name": "row_id",           "type": "string", "value": "={{ $json.row_number || '' }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-ai-script",
+      "name": "AI SCRIPT section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, -120],
+      "parameters": {
+        "content": "## AI SCRIPT\nGenerates a 45-60 second video script using GPT-4.\n\nInput is capped at 2000 chars. Max tokens: 600.",
+        "height": 90,
+        "width": 240,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-script",
+      "name": "OpenAI: Generate Video Script",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [900, 0],
+      "parameters": {
+        "operation": "text",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a professional short-form video scriptwriter. Write a 45-60 second engaging video script for social media. Format: hook (5s), main message (40s), CTA (5s). Be conversational, clear, and human."
+            },
+            {
+              "role": "user",
+              "content": "Write a video script about: {{ $json.topic.substring(0, 2000) }}. Tone: {{ $json.tone }}."
+            }
+          ]
+        },
+        "options": {"maxTokens": 600}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "if-script-valid",
+      "name": "IF: Script Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.message.content.length }}", "rightValue": 100, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-script",
+      "name": "Set: Extract Script Text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1340, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "script", "type": "string", "value": "={{ $json.message.content }}"},
+            {"name": "topic",  "type": "string", "value": "={{ $('Set: Normalize Content Brief').item.json.topic }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-heygen",
+      "name": "VIDEO GENERATION section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1560, -120],
+      "parameters": {
+        "content": "## VIDEO GENERATION\nSends script to HeyGen to generate an AI avatar video.\n\n**Update:** Replace `avatar_id` and `voice_id` with your HeyGen avatar and voice IDs.",
+        "height": 100,
+        "width": 260,
+        "color": 6
+      }
+    },
+    {
+      "id": "heygen-generate",
+      "name": "HeyGen: Generate Avatar Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1580, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.heygen.com/v2/video/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{"name": "X-Api-Key", "value": "={{ $credentials.heyGenApi.value }}"}]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={ \"video_inputs\": [{\"character\": {\"type\": \"avatar\", \"avatar_id\": \"REPLACE_WITH_AVATAR_ID\", \"avatar_style\": \"normal\"}, \"voice\": {\"type\": \"text\", \"input_text\": \"{{ $json.script }}\", \"voice_id\": \"REPLACE_WITH_VOICE_ID\"}}], \"dimension\": {\"width\": 1280, \"height\": 720} }",
+        "options": {"timeout": 30000, "retry": {"enabled": true, "maxTries": 3, "waitBetweenTries": 2000}}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "HeyGen API Key"
+        }
+      }
+    },
+    {
+      "id": "sticky-drive",
+      "name": "STORAGE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1820, -120],
+      "parameters": {
+        "content": "## STORAGE\nStores video ID for polling. When video is ready, uploads to Google Drive.\n\n**Update:** Set `folderId` to your Google Drive AI Videos folder ID.",
+        "height": 100,
+        "width": 260,
+        "color": 6
+      }
+    },
+    {
+      "id": "set-video-id",
+      "name": "Set: Store Video ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1840, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "video_id", "type": "string", "value": "={{ $json.data.video_id }}"},
+            {"name": "script",   "type": "string", "value": "={{ $('Set: Extract Script Text').item.json.script }}"},
+            {"name": "topic",    "type": "string", "value": "={{ $('Set: Extract Script Text').item.json.topic }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-distribute",
+      "name": "DISTRIBUTE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2080, -120],
+      "parameters": {
+        "content": "## DISTRIBUTE\nPosts to all configured platforms via Buffer.\n\n**Update:** Set Buffer `profileIds` to your connected social account IDs.\n\nSee Buffer API docs: https://buffer.com/developers/api",
+        "height": 120,
+        "width": 280,
+        "color": 6
+      }
+    },
+    {
+      "id": "buffer-post",
+      "name": "Buffer: Post to All Platforms",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2100, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.bufferapp.com/1/updates/create.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{"name": "Authorization", "value": "Bearer REPLACE_WITH_BUFFER_TOKEN"}]
+        },
+        "sendBody": true,
+        "contentType": "form",
+        "body": "profile_ids[]=REPLACE_WITH_INSTAGRAM_PROFILE_ID&profile_ids[]=REPLACE_WITH_YOUTUBE_PROFILE_ID&text={{ encodeURIComponent($json.topic) }}",
+        "options": {"timeout": 30000, "retry": {"enabled": true, "maxTries": 3, "waitBetweenTries": 2000}}
+      }
+    },
+    {
+      "id": "if-posted",
+      "name": "IF: Post Successful",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2320, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.success }}", "rightValue": true, "operator": {"type": "boolean", "operation": "equals"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sheets-update-status",
+      "name": "Google Sheets: Update Status Published",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2540, 0],
+      "parameters": {
+        "operation": "update",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Content Queue", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status":       "published",
+            "published_at": "={{ new Date().toISOString() }}"
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 09:00 UTC": {
+      "main": [[{"node": "Google Sheets: Get Today's Prompt", "type": "main", "index": 0}]]
+    },
+    "Google Sheets: Get Today's Prompt": {
+      "main": [[{"node": "IF: Prompt Found", "type": "main", "index": 0}]]
+    },
+    "IF: Prompt Found": {
+      "main": [
+        [{"node": "Set: Normalize Content Brief", "type": "main", "index": 0}],
+        [{"node": "No Content Today — Stop", "type": "main", "index": 0}]
+      ]
+    },
+    "Set: Normalize Content Brief": {
+      "main": [[{"node": "OpenAI: Generate Video Script", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Generate Video Script": {
+      "main": [[{"node": "IF: Script Valid", "type": "main", "index": 0}]]
+    },
+    "IF: Script Valid": {
+      "main": [
+        [{"node": "Set: Extract Script Text", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Set: Extract Script Text": {
+      "main": [[{"node": "HeyGen: Generate Avatar Video", "type": "main", "index": 0}]]
+    },
+    "HeyGen: Generate Avatar Video": {
+      "main": [[{"node": "Set: Store Video ID", "type": "main", "index": 0}]]
+    },
+    "Set: Store Video ID": {
+      "main": [[{"node": "Buffer: Post to All Platforms", "type": "main", "index": 0}]]
+    },
+    "Buffer: Post to All Platforms": {
+      "main": [[{"node": "IF: Post Successful", "type": "main", "index": 0}]]
+    },
+    "IF: Post Successful": {
+      "main": [
+        [{"node": "Google Sheets: Update Status Published", "type": "main", "index": 0}],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["video", "social-media", "ai", "production"],
+  "pinData": {}
+}

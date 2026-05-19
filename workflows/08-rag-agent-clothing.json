@@ -1,0 +1,590 @@
+{
+  "name": "08 — AI RAG Agent for a Clothing Brand",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -320],
+      "parameters": {
+        "content": "# AI RAG Agent — Clothing Brand\n\n**Trigger:** Webhook (WhatsApp via Twilio or web widget)\n**Flow:** Validate → Embed query → Pinecone search → Stock check (conditional) → GPT-4 response → Confidence gate → Reply or escalate\n\n**Credentials needed:**\n- `openAiApi`\n- `pineconeApi` (HTTP Header Auth)\n- `shopifyApi` (HTTP Header Auth)\n- `twilioApi`\n- `slackApi`\n- `airtableTokenApi`\n- `googleSheetsOAuth2Api`",
+        "height": 230,
+        "width": 400,
+        "color": 7
+      }
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook: Receive Customer Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson"
+      }
+    },
+    {
+      "id": "if-validate",
+      "name": "IF: Message Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.body.message }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.customer_id }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "twilio-invalid",
+      "name": "Twilio: Send Error Reply",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [440, 160],
+      "parameters": {
+        "operation": "send",
+        "from": "REPLACE_WITH_TWILIO_WHATSAPP_NUMBER",
+        "to": "={{ $json.body.from || $json.body.customer_id }}",
+        "message": "Sorry, I didn't receive your message correctly. Please try again."
+      },
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Query",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "customer_id",  "type": "string", "value": "={{ $json.body.customer_id }}"},
+            {"name": "message",      "type": "string", "value": "={{ $json.body.message.substring(0, 500) }}"},
+            {"name": "channel",      "type": "string", "value": "={{ $json.body.channel || 'web' }}"},
+            {"name": "from_number",  "type": "string", "value": "={{ $json.body.From || $json.body.customer_id }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-embed",
+      "name": "EMBEDDINGS section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [660, -120],
+      "parameters": {
+        "content": "## EMBEDDINGS\nConverts customer query into a vector using OpenAI text-embedding-3-small.\n\nThis vector is used to search Pinecone for semantically similar product/FAQ content.",
+        "height": 100,
+        "width": 280,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-embed",
+      "name": "OpenAI: Create Embedding",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [680, 0],
+      "parameters": {
+        "operation": "embedding",
+        "modelId": "text-embedding-3-small",
+        "input": "={{ $json.message }}"
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "if-embed-ok",
+      "name": "IF: Embedding Generated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.embedding.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-pinecone",
+      "name": "VECTOR SEARCH section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1120, -120],
+      "parameters": {
+        "content": "## VECTOR SEARCH\nQueries Pinecone for the top-5 most relevant catalogue chunks.\n\n**Update:** Replace index name and host URL with your Pinecone index details.\n\nNamespace: `clothing-catalogue`",
+        "height": 110,
+        "width": 280,
+        "color": 6
+      }
+    },
+    {
+      "id": "pinecone-query",
+      "name": "Pinecone: Query Catalogue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1140, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://REPLACE_WITH_PINECONE_INDEX_HOST/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Api-Key", "value": "={{ $credentials.pineconeApi.value }}"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={ \"vector\": {{ $json.embedding }}, \"topK\": 5, \"includeMetadata\": true, \"namespace\": \"clothing-catalogue\" }",
+        "options": {"timeout": 15000, "retry": {"enabled": true, "maxTries": 3, "waitBetweenTries": 1000}}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Pinecone API Key"
+        }
+      }
+    },
+    {
+      "id": "if-results-returned",
+      "name": "IF: Catalogue Matches Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1360, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.matches.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-context",
+      "name": "Set: Build Context from Chunks",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1580, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "catalogue_context",
+              "type": "string",
+              "value": "={{ $json.matches.map(m => m.metadata.text).join('\\n\\n').substring(0, 3000) }}"
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "value": "={{ $('Set: Normalize Query').item.json.message }}"
+            },
+            {
+              "name": "customer_id",
+              "type": "string",
+              "value": "={{ $('Set: Normalize Query').item.json.customer_id }}"
+            },
+            {
+              "name": "from_number",
+              "type": "string",
+              "value": "={{ $('Set: Normalize Query').item.json.from_number }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-stock",
+      "name": "STOCK CHECK section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1800, -140],
+      "parameters": {
+        "content": "## STOCK CHECK (Conditional)\nOnly runs if the customer query mentions a product, item, or stock.\n\n**Update:** Set Shopify store domain in the HTTP Request URL.",
+        "height": 100,
+        "width": 280,
+        "color": 6
+      }
+    },
+    {
+      "id": "if-mentions-product",
+      "name": "IF: Query Mentions Product/Stock",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1820, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {
+              "leftValue": "={{ /(stock|available|size|colour|color|dress|shirt|jacket|trouser|shoe|bag|price|how much|do you have)/i.test($json.message) }}",
+              "rightValue": true,
+              "operator": {"type": "boolean", "operation": "equals"}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "shopify-stock",
+      "name": "Shopify: Check Stock Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2040, -80],
+      "parameters": {
+        "method": "GET",
+        "url": "https://REPLACE_WITH_SHOP_DOMAIN.myshopify.com/admin/api/2024-01/products.json?title={{ encodeURIComponent($json.message.substring(0,50)) }}&limit=3",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{"name": "X-Shopify-Access-Token", "value": "={{ $credentials.shopifyApi.value }}"}]
+        },
+        "options": {"timeout": 15000, "retry": {"enabled": true, "maxTries": 2, "waitBetweenTries": 1000}}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Shopify Access Token"
+        }
+      }
+    },
+    {
+      "id": "set-stock-context",
+      "name": "Set: Add Stock to Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2260, -80],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "stock_context",
+              "type": "string",
+              "value": "={{ $json.products ? $json.products.map(p => p.title + ': ' + (p.variants[0]?.inventory_quantity > 0 ? 'In stock' : 'Out of stock')).join(', ') : 'Stock data unavailable' }}"
+            },
+            {"name": "catalogue_context", "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.catalogue_context }}"},
+            {"name": "message",           "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.message }}"},
+            {"name": "customer_id",       "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.customer_id }}"},
+            {"name": "from_number",       "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.from_number }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-no-stock-context",
+      "name": "Set: No Stock Check — Keep Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2040, 80],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "stock_context",     "type": "string", "value": ""},
+            {"name": "catalogue_context", "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.catalogue_context }}"},
+            {"name": "message",           "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.message }}"},
+            {"name": "customer_id",       "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.customer_id }}"},
+            {"name": "from_number",       "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.from_number }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-ai-response",
+      "name": "AI RESPONSE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2480, -140],
+      "parameters": {
+        "content": "## AI RESPONSE\nGPT-4 generates a grounded answer using only the catalogue context and stock data.\n\nReturns structured JSON: `{ answer, confidence (0-1), needs_escalation (bool) }`\n\nConfidence < 0.7 triggers human escalation.",
+        "height": 120,
+        "width": 300,
+        "color": 5
+      }
+    },
+    {
+      "id": "openai-chat",
+      "name": "OpenAI: Generate Grounded Response",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [2500, 0],
+      "parameters": {
+        "operation": "text",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a helpful, friendly shopping assistant for a clothing brand. Answer ONLY using the provided catalogue context and stock data. If the answer is not in the context, say so and offer to connect the customer to a team member. Return ONLY valid JSON: {\"answer\": \"<your response, max 300 chars>\", \"confidence\": 0.0-1.0, \"needs_escalation\": true/false}"
+            },
+            {
+              "role": "user",
+              "content": "Customer question: {{ $json.message }}\n\nCatalogue context:\n{{ $json.catalogue_context }}\n\nStock info: {{ $json.stock_context || 'Not checked' }}"
+            }
+          ]
+        },
+        "options": {"maxTokens": 250}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "set-parse-response",
+      "name": "Set: Parse AI Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2720, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "answer",           "type": "string", "value": "={{ JSON.parse($json.message.content).answer }}"},
+            {"name": "confidence",       "type": "number", "value": "={{ JSON.parse($json.message.content).confidence }}"},
+            {"name": "needs_escalation", "type": "boolean","value": "={{ JSON.parse($json.message.content).needs_escalation }}"},
+            {"name": "customer_id",      "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.customer_id }}"},
+            {"name": "from_number",      "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.from_number }}"},
+            {"name": "message",          "type": "string", "value": "={{ $('Set: Build Context from Chunks').item.json.message }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "if-escalate",
+      "name": "IF: Confidence Low or Escalation Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2940, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {
+              "leftValue": "={{ $json.confidence < 0.7 || $json.needs_escalation }}",
+              "rightValue": true,
+              "operator": {"type": "boolean", "operation": "equals"}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-escalate",
+      "name": "ESCALATION section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3160, -140],
+      "parameters": {
+        "content": "## ESCALATION\nRoutes low-confidence queries to human support via Slack.\n\nCustomer receives a friendly holding message while team is alerted.",
+        "height": 100,
+        "width": 260,
+        "color": 1
+      }
+    },
+    {
+      "id": "slack-escalate",
+      "name": "Slack: Alert #customer-support",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [3180, -80],
+      "parameters": {
+        "operation": "message",
+        "channel": "REPLACE_WITH_SUPPORT_CHANNEL_ID",
+        "text": ":raising_hand: *Customer Support Escalation*\n*Customer ID:* {{ $json.customer_id }}\n*Query:* {{ $json.message }}\n*AI Confidence:* {{ ($json.confidence * 100).toFixed(0) }}%\n*AI Answer Attempt:* {{ $json.answer }}\n\nPlease respond to this customer directly.",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot Token"
+        }
+      }
+    },
+    {
+      "id": "twilio-escalation-reply",
+      "name": "Twilio: Send Escalation Message",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [3180, 60],
+      "parameters": {
+        "operation": "send",
+        "from": "REPLACE_WITH_TWILIO_WHATSAPP_NUMBER",
+        "to": "={{ $json.from_number }}",
+        "message": "Thank you for your question! I'm connecting you with one of our team members who can help you further. They'll be with you shortly. 😊"
+      },
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "id": "twilio-ai-reply",
+      "name": "Twilio: Send AI Answer",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [3180, 200],
+      "parameters": {
+        "operation": "send",
+        "from": "REPLACE_WITH_TWILIO_WHATSAPP_NUMBER",
+        "to": "={{ $json.from_number }}",
+        "message": "={{ $json.answer }}"
+      },
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "id": "sticky-log",
+      "name": "LOG section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3420, -120],
+      "parameters": {
+        "content": "## LOG\nLogs every conversation to Airtable for analysis and model improvement.\n\n**Update:** Set `baseId` and `tableId` to your Airtable base.",
+        "height": 90,
+        "width": 240,
+        "color": 6
+      }
+    },
+    {
+      "id": "airtable-log",
+      "name": "Airtable: Log Conversation",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [3440, 0],
+      "parameters": {
+        "operation": "create",
+        "baseId": "REPLACE_WITH_AIRTABLE_BASE_ID",
+        "tableId": "Chat Logs",
+        "fields": {
+          "fieldMappingMode": "defineBelow",
+          "value": {
+            "customer_id":  "={{ $json.customer_id }}",
+            "query":        "={{ $json.message }}",
+            "answer":       "={{ $json.answer }}",
+            "confidence":   "={{ $json.confidence }}",
+            "escalated":    "={{ $json.needs_escalation || $json.confidence < 0.7 }}",
+            "timestamp":    "={{ new Date().toISOString() }}"
+          }
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Airtable API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Receive Customer Message": {
+      "main": [[{"node": "IF: Message Valid", "type": "main", "index": 0}]]
+    },
+    "IF: Message Valid": {
+      "main": [
+        [{"node": "Set: Normalize Query", "type": "main", "index": 0}],
+        [{"node": "Twilio: Send Error Reply", "type": "main", "index": 0}]
+      ]
+    },
+    "Set: Normalize Query": {
+      "main": [[{"node": "OpenAI: Create Embedding", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Create Embedding": {
+      "main": [[{"node": "IF: Embedding Generated", "type": "main", "index": 0}]]
+    },
+    "IF: Embedding Generated": {
+      "main": [
+        [{"node": "Pinecone: Query Catalogue", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Pinecone: Query Catalogue": {
+      "main": [[{"node": "IF: Catalogue Matches Found", "type": "main", "index": 0}]]
+    },
+    "IF: Catalogue Matches Found": {
+      "main": [
+        [{"node": "Set: Build Context from Chunks", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Set: Build Context from Chunks": {
+      "main": [[{"node": "IF: Query Mentions Product/Stock", "type": "main", "index": 0}]]
+    },
+    "IF: Query Mentions Product/Stock": {
+      "main": [
+        [{"node": "Shopify: Check Stock Availability", "type": "main", "index": 0}],
+        [{"node": "Set: No Stock Check — Keep Context", "type": "main", "index": 0}]
+      ]
+    },
+    "Shopify: Check Stock Availability": {
+      "main": [[{"node": "Set: Add Stock to Context", "type": "main", "index": 0}]]
+    },
+    "Set: Add Stock to Context": {
+      "main": [[{"node": "OpenAI: Generate Grounded Response", "type": "main", "index": 0}]]
+    },
+    "Set: No Stock Check — Keep Context": {
+      "main": [[{"node": "OpenAI: Generate Grounded Response", "type": "main", "index": 0}]]
+    },
+    "OpenAI: Generate Grounded Response": {
+      "main": [[{"node": "Set: Parse AI Response", "type": "main", "index": 0}]]
+    },
+    "Set: Parse AI Response": {
+      "main": [[{"node": "IF: Confidence Low or Escalation Needed", "type": "main", "index": 0}]]
+    },
+    "IF: Confidence Low or Escalation Needed": {
+      "main": [
+        [
+          {"node": "Slack: Alert #customer-support", "type": "main", "index": 0},
+          {"node": "Twilio: Send Escalation Message", "type": "main", "index": 0}
+        ],
+        [{"node": "Twilio: Send AI Answer", "type": "main", "index": 0}]
+      ]
+    },
+    "Twilio: Send AI Answer": {
+      "main": [[{"node": "Airtable: Log Conversation", "type": "main", "index": 0}]]
+    },
+    "Twilio: Send Escalation Message": {
+      "main": [[{"node": "Airtable: Log Conversation", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["rag", "ai-agent", "ecommerce", "whatsapp", "production"],
+  "pinData": {}
+}

@@ -1,0 +1,397 @@
+{
+  "name": "01 — Salon Appointment Booking Automation",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "OVERVIEW",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -300],
+      "parameters": {
+        "content": "# Salon Appointment Booking\n\n**Trigger:** Typeform or Tally webhook\n**Flow:** Validate → Check Calendar → Create Event → Confirm (SMS + Email) → Log\n**Error handling:** All failures route to shared error handler (Google Sheets log)\n\n**Credentials needed:**\n- `googleCalendarOAuth2`\n- `googleSheetsOAuth2Api`\n- `twilioApi`\n- `gmailOAuth2`",
+        "height": 200,
+        "width": 380,
+        "color": 7
+      }
+    },
+    {
+      "id": "sticky-trigger",
+      "name": "TRIGGER section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -40],
+      "parameters": {
+        "content": "## TRIGGER\nReceives form submission from Typeform or Tally.\n\n**Security:** Enable Header Auth or Basic Auth in the Webhook node settings before going live.",
+        "height": 100,
+        "width": 260,
+        "color": 4
+      }
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook: Receive Booking",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salon-booking",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson"
+      }
+    },
+    {
+      "id": "sticky-validate",
+      "name": "VALIDATE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, -120],
+      "parameters": {
+        "content": "## VALIDATE INPUT\nRejects requests missing required fields before any processing begins.\n\nRequired: `name`, `email`, `phone`, `service`, `requested_date`, `requested_time`",
+        "height": 110,
+        "width": 260,
+        "color": 3
+      }
+    },
+    {
+      "id": "if-validate",
+      "name": "IF: Required Fields Present",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2, "caseSensitive": true},
+          "conditions": [
+            {"leftValue": "={{ $json.body.name }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.email }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.service }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}},
+            {"leftValue": "={{ $json.body.requested_date }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "respond-invalid",
+      "name": "Respond: 400 Missing Fields",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 140],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": "={ \"error\": \"Missing required booking fields\", \"required\": [\"name\",\"email\",\"service\",\"requested_date\"] }"
+      }
+    },
+    {
+      "id": "sticky-normalize",
+      "name": "NORMALIZE section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [440, -120],
+      "parameters": {
+        "content": "## NORMALIZE\nExtracts only the fields this workflow needs. Strips all raw webhook metadata to keep downstream nodes lean.",
+        "height": 90,
+        "width": 240,
+        "color": 3
+      }
+    },
+    {
+      "id": "set-normalize",
+      "name": "Set: Normalize Booking Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [460, 0],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {"name": "client_name",      "type": "string", "value": "={{ $json.body.name }}"},
+            {"name": "client_email",     "type": "string", "value": "={{ $json.body.email }}"},
+            {"name": "client_phone",     "type": "string", "value": "={{ $json.body.phone || '' }}"},
+            {"name": "service",          "type": "string", "value": "={{ $json.body.service }}"},
+            {"name": "requested_date",   "type": "string", "value": "={{ $json.body.requested_date }}"},
+            {"name": "requested_time",   "type": "string", "value": "={{ $json.body.requested_time || '10:00' }}"},
+            {"name": "notes",            "type": "string", "value": "={{ $json.body.notes || '' }}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-calendar",
+      "name": "CALENDAR CHECK section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [680, -120],
+      "parameters": {
+        "content": "## CALENDAR CHECK\nChecks Google Calendar for conflicts in the requested slot ± 1 hour.\n\n**Update:** Set `calendarId` to your salon's calendar ID.",
+        "height": 100,
+        "width": 240,
+        "color": 6
+      }
+    },
+    {
+      "id": "calendar-check",
+      "name": "Google Calendar: Check Availability",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [700, 0],
+      "parameters": {
+        "operation": "getAll",
+        "calendarId": "REPLACE_WITH_CALENDAR_ID",
+        "timeMin": "={{ $json.requested_date }}T{{ $json.requested_time }}:00Z",
+        "timeMax": "={{ $json.requested_date }}T{{ $json.requested_time.split(':')[0] | int + 1 }}:00:00Z",
+        "options": {"maxResults": 5}
+      },
+      "credentials": {
+        "googleCalendarOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "id": "if-slot-free",
+      "name": "IF: Slot Available",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [920, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.length }}", "rightValue": 0, "operator": {"type": "number", "operation": "equals"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "gmail-unavailable",
+      "name": "Gmail: Slot Unavailable Notice",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1140, 140],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $('Set: Normalize Booking Fields').item.json.client_email }}",
+        "subject": "Booking Request — Time Slot Unavailable",
+        "emailType": "html",
+        "message": "<p>Hi {{ $('Set: Normalize Booking Fields').item.json.client_name }},</p><p>Unfortunately the {{ $('Set: Normalize Booking Fields').item.json.requested_date }} at {{ $('Set: Normalize Booking Fields').item.json.requested_time }} slot is already taken. Please reply to this email with an alternative time and we'll get you booked in.</p><p>Apologies for the inconvenience!</p>"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "id": "sticky-create",
+      "name": "CREATE BOOKING section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1140, -120],
+      "parameters": {
+        "content": "## CREATE BOOKING\nCreates the confirmed event in Google Calendar.",
+        "height": 80,
+        "width": 200,
+        "color": 6
+      }
+    },
+    {
+      "id": "calendar-create",
+      "name": "Google Calendar: Create Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1160, 0],
+      "parameters": {
+        "operation": "create",
+        "calendarId": "REPLACE_WITH_CALENDAR_ID",
+        "summary": "={{ $('Set: Normalize Booking Fields').item.json.service }} — {{ $('Set: Normalize Booking Fields').item.json.client_name }}",
+        "start": "={{ $('Set: Normalize Booking Fields').item.json.requested_date }}T{{ $('Set: Normalize Booking Fields').item.json.requested_time }}:00",
+        "end": "={{ $('Set: Normalize Booking Fields').item.json.requested_date }}T{{ parseInt($('Set: Normalize Booking Fields').item.json.requested_time.split(':')[0]) + 1 }}:00:00",
+        "additionalFields": {
+          "description": "Client: {{ $('Set: Normalize Booking Fields').item.json.client_name }}\nEmail: {{ $('Set: Normalize Booking Fields').item.json.client_email }}\nPhone: {{ $('Set: Normalize Booking Fields').item.json.client_phone }}\nNotes: {{ $('Set: Normalize Booking Fields').item.json.notes }}"
+        }
+      },
+      "credentials": {
+        "googleCalendarOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "id": "if-event-created",
+      "name": "IF: Event Created Successfully",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1380, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"version": 2},
+          "conditions": [
+            {"leftValue": "={{ $json.id }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "sticky-confirm",
+      "name": "CONFIRM section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1600, -120],
+      "parameters": {
+        "content": "## CONFIRM\nSends SMS via Twilio and email via Gmail to the client.\n\n**Update:** Set Twilio `from` number to your Twilio phone number.",
+        "height": 100,
+        "width": 240,
+        "color": 5
+      }
+    },
+    {
+      "id": "twilio-sms",
+      "name": "Twilio: Send Confirmation SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [1620, 0],
+      "parameters": {
+        "operation": "send",
+        "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
+        "to": "={{ $('Set: Normalize Booking Fields').item.json.client_phone }}",
+        "message": "Hi {{ $('Set: Normalize Booking Fields').item.json.client_name }}, your {{ $('Set: Normalize Booking Fields').item.json.service }} appointment is confirmed for {{ $('Set: Normalize Booking Fields').item.json.requested_date }} at {{ $('Set: Normalize Booking Fields').item.json.requested_time }}. Reply CANCEL to cancel."
+      },
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "id": "gmail-confirm",
+      "name": "Gmail: Send Confirmation Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1840, 0],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $('Set: Normalize Booking Fields').item.json.client_email }}",
+        "subject": "Booking Confirmed — {{ $('Set: Normalize Booking Fields').item.json.service }}",
+        "emailType": "html",
+        "message": "<h2>Your booking is confirmed!</h2><p>Hi {{ $('Set: Normalize Booking Fields').item.json.client_name }},</p><p>We look forward to seeing you for your <strong>{{ $('Set: Normalize Booking Fields').item.json.service }}</strong> appointment on <strong>{{ $('Set: Normalize Booking Fields').item.json.requested_date }}</strong> at <strong>{{ $('Set: Normalize Booking Fields').item.json.requested_time }}</strong>.</p><p>If you need to cancel or reschedule, please reply to this email at least 24 hours before your appointment.</p><p>See you soon!</p>"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "id": "sticky-log",
+      "name": "LOG section note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2060, -120],
+      "parameters": {
+        "content": "## LOG\nAppends booking record to Google Sheets for reporting and follow-up.\n\n**Update:** Set `documentId` to your bookings spreadsheet ID.",
+        "height": 100,
+        "width": 240,
+        "color": 6
+      }
+    },
+    {
+      "id": "sheets-log",
+      "name": "Google Sheets: Log Booking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2080, 0],
+      "parameters": {
+        "operation": "append",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Bookings", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp":       "={{ new Date().toISOString() }}",
+            "client_name":     "={{ $('Set: Normalize Booking Fields').item.json.client_name }}",
+            "client_email":    "={{ $('Set: Normalize Booking Fields').item.json.client_email }}",
+            "service":         "={{ $('Set: Normalize Booking Fields').item.json.service }}",
+            "date":            "={{ $('Set: Normalize Booking Fields').item.json.requested_date }}",
+            "time":            "={{ $('Set: Normalize Booking Fields').item.json.requested_time }}",
+            "calendar_event_id":"={{ $('Google Calendar: Create Event').item.json.id }}"
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "respond-success",
+      "name": "Respond: 200 Booking Confirmed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2300, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": "={ \"status\": \"confirmed\", \"message\": \"Booking confirmed. Check your email and SMS for details.\" }"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Receive Booking": {
+      "main": [[{"node": "IF: Required Fields Present", "type": "main", "index": 0}]]
+    },
+    "IF: Required Fields Present": {
+      "main": [
+        [{"node": "Set: Normalize Booking Fields", "type": "main", "index": 0}],
+        [{"node": "Respond: 400 Missing Fields", "type": "main", "index": 0}]
+      ]
+    },
+    "Set: Normalize Booking Fields": {
+      "main": [[{"node": "Google Calendar: Check Availability", "type": "main", "index": 0}]]
+    },
+    "Google Calendar: Check Availability": {
+      "main": [[{"node": "IF: Slot Available", "type": "main", "index": 0}]]
+    },
+    "IF: Slot Available": {
+      "main": [
+        [{"node": "Google Calendar: Create Event", "type": "main", "index": 0}],
+        [{"node": "Gmail: Slot Unavailable Notice", "type": "main", "index": 0}]
+      ]
+    },
+    "Google Calendar: Create Event": {
+      "main": [[{"node": "IF: Event Created Successfully", "type": "main", "index": 0}]]
+    },
+    "IF: Event Created Successfully": {
+      "main": [
+        [{"node": "Twilio: Send Confirmation SMS", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Twilio: Send Confirmation SMS": {
+      "main": [[{"node": "Gmail: Send Confirmation Email", "type": "main", "index": 0}]]
+    },
+    "Gmail: Send Confirmation Email": {
+      "main": [[{"node": "Google Sheets: Log Booking", "type": "main", "index": 0}]]
+    },
+    "Google Sheets: Log Booking": {
+      "main": [[{"node": "Respond: 200 Booking Confirmed", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_ERROR_HANDLER_WORKFLOW_ID",
+    "timezone": "UTC",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "tags": ["salon", "booking", "production"],
+  "pinData": {}
+}
