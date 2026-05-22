@@ -6,18 +6,13 @@
   <title>Afoma Francis — n8n Automation Specialist</title>
   <meta name="description" content="Afoma Francis builds intelligent automation workflows with n8n and AI that eliminate repetitive work, connect business tools, and accelerate decisions." />
   <meta name="author" content="Afoma Francis" />
-
-  <!-- Open Graph -->
   <meta property="og:title" content="Afoma Francis — n8n Automation Specialist" />
   <meta property="og:description" content="Building intelligent automation workflows that eliminate repetitive work and connect the tools businesses already use — powered by n8n and AI." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://afoma94.github.io" />
-
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -28,6 +23,7 @@
       <a class="nav__logo" href="#hero">AF</a>
       <ul class="nav__links" id="navLinks">
         <li><a href="#about">About</a></li>
+        <li><a href="#services">Services</a></li>
         <li><a href="#projects">Projects</a></li>
         <li><a href="#contact">Contact</a></li>
       </ul>
@@ -41,30 +37,84 @@
   <!-- ===== HERO ===== -->
   <section class="hero" id="hero">
     <div class="container">
-      <span class="hero__badge">n8n Automation Specialist</span>
-      <h1 class="hero__title">
-        I automate the work<br />your business shouldn't be doing.
-      </h1>
-      <p class="hero__tagline">
-        Building intelligent automation workflows that eliminate repetitive work, accelerate decisions, and connect the tools businesses already use — powered by n8n and AI.
-      </p>
-      <div class="hero__cta">
-        <a class="btn btn--primary btn--lg" href="#projects">View My Work</a>
-        <a class="btn btn--outline btn--lg" href="#contact">Get in Touch</a>
-      </div>
-      <div class="hero__stats">
-        <div class="stat">
-          <span class="stat__number">8+</span>
-          <span class="stat__label">Workflow Projects</span>
+      <div class="hero__grid">
+
+        <!-- Left: text content -->
+        <div class="hero__content">
+          <div class="hero__available">
+            <span class="pulse-dot"></span>
+            Available for Projects
+          </div>
+          <h1 class="hero__title">
+            Hi, I'm <span class="hero__name">Afoma Francis</span>
+          </h1>
+          <p class="hero__sub">n8n Automation Specialist</p>
+          <p class="hero__tagline">
+            Building intelligent automation workflows that eliminate repetitive work, accelerate decisions, and connect the tools businesses already use — powered by n8n and AI.
+          </p>
+          <div class="hero__cta">
+            <a class="btn btn--primary btn--lg" href="#projects">View My Work</a>
+            <a class="btn btn--ghost btn--lg" href="#contact">Get in Touch</a>
+          </div>
+          <div class="hero__stats">
+            <div class="stat">
+              <span class="stat__number">8+</span>
+              <span class="stat__label">Workflow Projects</span>
+            </div>
+            <div class="stat">
+              <span class="stat__number">15+</span>
+              <span class="stat__label">Tools Integrated</span>
+            </div>
+            <div class="stat">
+              <span class="stat__number">90%</span>
+              <span class="stat__label">Manual Work Reduced</span>
+            </div>
+          </div>
         </div>
-        <div class="stat">
-          <span class="stat__number">4+</span>
-          <span class="stat__label">Platforms per Deploy</span>
+
+        <!-- Right: live workflow execution card -->
+        <div class="hero__visual">
+          <div class="workflow-card">
+            <div class="workflow-card__head">
+              <div class="workflow-card__status">
+                <span class="pulse-dot pulse-dot--sm"></span>
+                <span>Automation Running</span>
+              </div>
+              <span class="workflow-card__badge">LIVE</span>
+            </div>
+            <ul class="workflow-steps">
+              <li class="wf-step wf-step--done">
+                <svg class="wf-step__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Webhook received
+              </li>
+              <li class="wf-step wf-step--done">
+                <svg class="wf-step__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Fields validated
+              </li>
+              <li class="wf-step wf-step--done">
+                <svg class="wf-step__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Calendar checked
+              </li>
+              <li class="wf-step wf-step--done">
+                <svg class="wf-step__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Booking created
+              </li>
+              <li class="wf-step wf-step--done">
+                <svg class="wf-step__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                SMS confirmation sent
+              </li>
+              <li class="wf-step wf-step--done">
+                <svg class="wf-step__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Email delivered &amp; logged
+              </li>
+            </ul>
+            <div class="workflow-card__foot">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Completed in 1.2s &middot; 0 errors
+            </div>
+          </div>
         </div>
-        <div class="stat">
-          <span class="stat__number">90%</span>
-          <span class="stat__label">Manual Work Reduced</span>
-        </div>
+
       </div>
     </div>
   </section>
@@ -79,7 +129,6 @@
         <span>Shopify</span><span>Pinecone</span><span>Buffer</span>
         <span>Typeform</span><span>SAP REST API</span><span>PhantomBuster</span>
         <span>Gmail</span><span>Google Sheets</span><span>Google Calendar</span>
-        <!-- Duplicate for seamless loop -->
         <span>n8n</span><span>OpenAI GPT-4</span><span>Google Workspace</span>
         <span>Twilio</span><span>HeyGen</span><span>ElevenLabs</span>
         <span>HubSpot CRM</span><span>Slack</span><span>Airtable</span>
@@ -93,43 +142,80 @@
   <!-- ===== ABOUT ===== -->
   <section class="about" id="about">
     <div class="container">
+      <div class="section-header section-header--left">
+        <span class="label">About Me</span>
+        <h2>I turn your busiest bottlenecks into automated pipelines.</h2>
+        <div class="section-bar"></div>
+      </div>
       <div class="about__grid">
-        <div class="about__content">
-          <span class="label">About</span>
-          <h2>I turn your busiest bottlenecks into automated pipelines.</h2>
+        <div class="about__text">
           <p>I'm Afoma Francis, an n8n automation specialist who designs and builds workflow systems that connect the tools your business already relies on. Whether you need to eliminate manual data entry, scale your outreach, or deploy an AI agent — I build it clean, reliable, and production-ready.</p>
           <p>My work sits at the intersection of automation, AI, and practical business outcomes. Every automation I deliver has a measurable result: hours saved, errors eliminated, or revenue unlocked.</p>
+          <p>I work with businesses across industries — from beauty &amp; wellness to finance, HR, and e-commerce — building systems that run quietly in the background, so your team can focus on what actually matters.</p>
         </div>
-        <div class="services">
-          <div class="service-card" data-animate>
-            <div class="service-card__icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            </div>
-            <h3>Workflow Automation</h3>
-            <p>End-to-end n8n workflows that replace manual, repetitive processes across your entire stack.</p>
-          </div>
-          <div class="service-card" data-animate>
-            <div class="service-card__icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-            </div>
-            <h3>AI Integration</h3>
-            <p>GPT-4, embeddings, sentiment analysis, and RAG agents embedded directly into your workflows.</p>
-          </div>
-          <div class="service-card" data-animate>
-            <div class="service-card__icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </div>
-            <h3>API & App Connections</h3>
-            <p>CRMs, ERPs, social platforms, communication tools — connected, synced, and always in flow.</p>
-          </div>
-          <div class="service-card" data-animate>
-            <div class="service-card__icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            </div>
-            <h3>Data & Reporting</h3>
-            <p>Automated pipelines that capture, clean, and surface the data your team needs to decide fast.</p>
+        <div class="about__visual">
+          <div class="tools-grid">
+            <div class="tool-chip">n8n</div>
+            <div class="tool-chip">OpenAI</div>
+            <div class="tool-chip">Google Workspace</div>
+            <div class="tool-chip">Slack</div>
+            <div class="tool-chip">Airtable</div>
+            <div class="tool-chip">HubSpot</div>
+            <div class="tool-chip">Twilio</div>
+            <div class="tool-chip">Shopify</div>
+            <div class="tool-chip">Pinecone</div>
+            <div class="tool-chip">HeyGen</div>
+            <div class="tool-chip">ElevenLabs</div>
+            <div class="tool-chip">SAP API</div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SERVICES ===== -->
+  <section class="services-section" id="services">
+    <div class="container">
+      <div class="section-header">
+        <span class="label">What I Do</span>
+        <h2>Services</h2>
+        <div class="section-bar" style="margin-left:auto;margin-right:auto;"></div>
+        <p>End-to-end automation solutions that solve real business problems — from simple integrations to full AI-powered workflow systems.</p>
+      </div>
+      <div class="services__grid">
+
+        <div class="service-card" data-animate>
+          <div class="service-card__icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <h3>Workflow Automation</h3>
+          <p>End-to-end n8n workflows that replace manual, repetitive processes across your entire tool stack — triggered, monitored, and self-healing.</p>
+        </div>
+
+        <div class="service-card" data-animate>
+          <div class="service-card__icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          </div>
+          <h3>AI Integration</h3>
+          <p>GPT-4, embeddings, sentiment analysis, and RAG agents embedded directly into your workflows for intelligent decision-making at scale.</p>
+        </div>
+
+        <div class="service-card" data-animate>
+          <div class="service-card__icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </div>
+          <h3>API &amp; App Connections</h3>
+          <p>CRMs, ERPs, social platforms, and communication tools — connected, synced, and always in flow. No more copy-pasting between systems.</p>
+        </div>
+
+        <div class="service-card" data-animate>
+          <div class="service-card__icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </div>
+          <h3>Data &amp; Reporting</h3>
+          <p>Automated pipelines that capture, clean, and surface the data your team needs. Google Sheets dashboards that update themselves.</p>
+        </div>
+
       </div>
     </div>
   </section>
@@ -139,175 +225,41 @@
     <div class="container">
       <div class="section-header">
         <span class="label">Portfolio</span>
-        <h2>Automation workflows built for real outcomes</h2>
-        <p>Each project below solves a specific business problem. Download any workflow JSON to import directly into your n8n instance.</p>
+        <h2>Automation Workflows</h2>
+        <div class="section-bar" style="margin-left:auto;margin-right:auto;"></div>
+        <p>Real automation projects built for real business outcomes. Click any project to see the full workflow breakdown.</p>
       </div>
 
       <div class="projects__grid">
 
         <!-- 01 Salon Booking -->
-        <article class="project-card" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">01</span>
-            <span class="project-card__industry">Beauty &amp; Wellness</span>
-          </div>
-          <h3>Salon Appointment Booking Automation</h3>
-          <p class="project-card__desc">A smart booking system that removes manual phone calls and back-and-forth messages. When a client submits a request, the workflow checks calendar availability, confirms the booking, and sends reminders automatically — no human intervention needed.</p>
-          <div class="project-card__tools">
-            <span>Typeform / Tally</span><span>Google Calendar</span>
-            <span>Twilio</span><span>Gmail</span>
-            <span>Google Sheets</span><span>OpenAI</span>
-          </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Eliminates manual booking calls — saves ~4 hrs/week and reduces no-shows with automated reminders.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/01-salon-booking.json" download>Download Workflow ↓</a>
-        </article>
-
-        <!-- 02 AI Video -->
-        <article class="project-card" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">02</span>
-            <span class="project-card__industry">Media &amp; Content</span>
-          </div>
-          <h3>AI Video Creation &amp; Multi-Platform Posting</h3>
-          <p class="project-card__desc">Turns a single text input into a fully produced short-form video with AI visuals, professional voiceover, and platform-tailored captions — then distributes it across all social channels simultaneously. What used to take hours now happens in minutes.</p>
-          <div class="project-card__tools">
-            <span>OpenAI GPT-4</span><span>HeyGen / Pictory</span>
-            <span>ElevenLabs</span><span>Buffer / Ayrshare</span>
-            <span>Instagram API</span><span>YouTube API</span>
-            <span>TikTok API</span><span>Google Drive</span>
-          </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Compresses a multi-hour content process into a single trigger — publish to 4+ platforms in minutes.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/02-ai-video-posting.json" download>Download Workflow ↓</a>
-        </article>
-
-        <!-- 03 Claims -->
-        <article class="project-card" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">03</span>
-            <span class="project-card__industry">Finance &amp; Insurance</span>
-          </div>
-          <h3>Claim Process Settlement Feedback</h3>
-          <p class="project-card__desc">A post-settlement pipeline that doesn't just collect responses — it understands them. AI analyses sentiment and categorises issues in real time, routing urgent or negative feedback to the right team immediately for faster service recovery.</p>
-          <div class="project-card__tools">
-            <span>Typeform / JotForm</span><span>OpenAI Sentiment</span>
-            <span>HubSpot CRM</span><span>Slack</span>
-            <span>Google Sheets</span><span>Gmail</span>
-          </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Auto-flags negative claims experience in real time — enables faster service recovery and compliance reporting.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/03-claim-settlement-feedback.json" download>Download Workflow ↓</a>
-        </article>
-
-        <!-- 04 Invoice SAP -->
-        <article class="project-card" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">04</span>
-            <span class="project-card__industry">Finance &amp; Ops</span>
-          </div>
-          <h3>AI Invoice Processing &amp; SAP Integration</h3>
-          <p class="project-card__desc">Eliminates the manual, error-prone process of logging invoices. The workflow monitors inboxes, reads documents with AI, cross-checks purchase orders, and pushes clean data directly into SAP — in seconds, not hours.</p>
-          <div class="project-card__tools">
-            <span>Gmail / Outlook</span><span>OpenAI Extraction</span>
-            <span>Google Drive / S3</span><span>SAP REST API</span>
-            <span>Airtable</span><span>Slack</span>
-          </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Reduces manual data entry by ~90% — processes invoices in seconds and eliminates costly input errors.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/04-ai-invoice-sap.json" download>Download Workflow ↓</a>
-        </article>
-
-        <!-- 05 Resume Avatar -->
-        <article class="project-card" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">05</span>
-            <span class="project-card__industry">HR &amp; Recruitment</span>
-          </div>
-          <h3>AI Resume Avatar Video Generator</h3>
-          <p class="project-card__desc">Transforms a static resume into a dynamic, talking-head video CV. AI extracts career highlights, writes a compelling personalised script, and produces a polished avatar video — giving job seekers a standout edge before the first interview.</p>
-          <div class="project-card__tools">
-            <span>Tally / Google Forms</span><span>OpenAI Script Gen</span>
-            <span>HeyGen Avatar</span><span>ElevenLabs</span>
-            <span>Google Drive</span><span>Gmail</span>
-          </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Delivers a polished video CV in under 5 minutes — gives job seekers a standout edge over text-only applicants.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/05-resume-avatar-video.json" download>Download Workflow ↓</a>
-        </article>
-
-        <!-- 06 LinkedIn -->
-        <article class="project-card" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">06</span>
-            <span class="project-card__industry">Sales &amp; Marketing</span>
-          </div>
-          <h3>Personalised LinkedIn Outreach with OpenAI</h3>
-          <p class="project-card__desc">Replaces generic, spray-and-pray outreach with AI-crafted messages tailored to each prospect's profile and context. The workflow pulls target lists, researches profiles, and generates unique connection messages — at volume, with a human-in-the-loop approval step.</p>
-          <div class="project-card__tools">
-            <span>Google Sheets / Airtable</span><span>PhantomBuster</span>
-            <span>OpenAI GPT-4</span><span>HubSpot CRM</span>
-            <span>Slack Approval</span><span>Gmail</span>
-          </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Scales personalised outreach from 10 to 100+ prospects/day — increases reply rates vs generic templates.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/06-linkedin-outreach.json" download>Download Workflow ↓</a>
-        </article>
-
-        <!-- 07 Social Approvals -->
-        <article class="project-card" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">07</span>
-            <span class="project-card__industry">Marketing &amp; Social</span>
-          </div>
-          <h3>Automated Social Media Posting with Approvals</h3>
-          <p class="project-card__desc">Combines AI content generation with a human-in-the-loop approval layer. Posts are drafted from a content calendar, routed to a Slack approver, and only published once signed off — giving marketing teams the speed of automation without sacrificing brand control.</p>
-          <div class="project-card__tools">
-            <span>Google Sheets</span><span>OpenAI Copy Gen</span>
-            <span>Slack Approvals</span><span>Buffer / Ayrshare</span>
-            <span>Instagram API</span><span>LinkedIn API</span><span>Twitter/X API</span>
-          </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Maintains brand safety with human-in-the-loop approval — saves 3–5 hrs/week on manual scheduling.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/07-social-media-approvals.json" download>Download Workflow ↓</a>
-        </article>
-
-        <!-- 08 RAG Agent — full width -->
         <article class="project-card project-card--wide" data-animate>
-          <div class="project-card__header">
-            <span class="project-card__num">08</span>
-            <span class="project-card__industry">E-commerce &amp; Retail</span>
+          <div class="project-card__image">
+            <img src="images/01-salon-booking.png" alt="Salon Appointment Booking Automation workflow in n8n" loading="lazy" />
           </div>
-          <h3>AI RAG Agent for a Clothing Brand</h3>
-          <p class="project-card__desc">A conversational AI assistant that knows the brand's entire catalogue inside out. Built on a retrieval-augmented generation (RAG) architecture, it answers shopper questions, recommends products based on preferences, checks live stock, and escalates complex queries to a human agent — all in real time on WhatsApp or the brand's website.</p>
-          <div class="project-card__tools">
-            <span>OpenAI GPT-4 + Embeddings</span><span>Pinecone / Supabase</span>
-            <span>Airtable</span><span>Shopify API</span>
-            <span>Twilio WhatsApp</span><span>Slack Escalation</span>
-            <span>Google Drive</span>
+          <div class="project-card__body">
+            <div class="project-card__header">
+              <span class="project-card__num">01</span>
+              <span class="project-card__industry">Beauty &amp; Wellness</span>
+            </div>
+            <h3>Salon Appointment Booking Automation</h3>
+            <p class="project-card__desc">Clients submit a booking request online via Typeform or Tally, instantly triggering a workflow that checks Google Calendar for slot availability. If the slot is free, an event is created and confirmations go out via both SMS and email — all within seconds of submission. Every booking is automatically logged to Google Sheets, giving the salon a clean record without a single manual entry.</p>
+            <div class="project-card__tools">
+              <span>Typeform / Tally</span>
+              <span>Google Calendar</span>
+              <span>Twilio SMS</span>
+              <span>Gmail</span>
+              <span>Google Sheets</span>
+              <span>n8n</span>
+            </div>
+            <a class="btn btn--primary project-card__cta" href="projects/01-salon-booking.html">Learn More →</a>
           </div>
-          <div class="project-card__outcome">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Handles 80%+ of customer queries without human intervention — boosts conversion by surfacing the right product at the right moment.
-          </div>
-          <a class="btn btn--outline btn--sm" href="workflows/08-rag-agent-clothing.json" download>Download Workflow ↓</a>
         </article>
 
       </div>
+
+      <p class="projects__more">More projects coming soon — each added as it's built and live.</p>
+
     </div>
   </section>
 
@@ -315,12 +267,13 @@
   <section class="contact" id="contact">
     <div class="container">
       <div class="contact__inner">
-        <span class="label">Let's Work Together</span>
+        <span class="label label--light">Let's Work Together</span>
         <h2>Ready to automate your workflows?</h2>
+        <div class="section-bar" style="margin:12px auto 20px;"></div>
         <p>Tell me about the repetitive process costing your team time — and I'll design a workflow that eliminates it. Whether you need a quick integration or a full AI-powered system, I'll scope it clearly and build it right.</p>
         <div class="contact__cta">
-          <a class="btn btn--primary btn--lg" href="mailto:hello@afomafrancis.com">Send a Message</a>
-          <a class="btn btn--outline btn--lg" href="https://linkedin.com/in/afomafrancis" target="_blank" rel="noopener noreferrer">Connect on LinkedIn</a>
+          <a class="btn btn--primary btn--lg" href="mailto:afomafrancis94@gmail.com">Send a Message</a>
+          <a class="btn btn--ghost btn--lg" href="https://www.linkedin.com/in/afoma-francis-06370140b/" target="_blank" rel="noopener noreferrer">Connect on LinkedIn</a>
         </div>
       </div>
     </div>
@@ -330,13 +283,17 @@
   <footer class="footer">
     <div class="container">
       <div class="footer__inner">
-        <span class="footer__name">Afoma Francis</span>
-        <span class="footer__copy">n8n Automation Specialist &middot; 2025</span>
+        <div class="footer__brand">
+          <span class="footer__logo">Afoma Francis</span>
+          <p>Building automation workflows that work while you sleep.</p>
+        </div>
         <nav class="footer__nav" aria-label="Footer navigation">
           <a href="#about">About</a>
+          <a href="#services">Services</a>
           <a href="#projects">Projects</a>
           <a href="#contact">Contact</a>
         </nav>
+        <p class="footer__copy">&copy; 2025 Afoma Francis. All rights reserved.</p>
       </div>
     </div>
   </footer>
